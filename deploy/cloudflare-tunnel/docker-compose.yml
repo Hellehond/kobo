@@ -1,0 +1,29 @@
+# Optie 2: kobosync thuis draaien en via een Cloudflare Tunnel online zetten.
+# Stappenplan: zie README.md in deze map.
+services:
+  kobosync:
+    build: ../..
+    container_name: kobosync
+    restart: unless-stopped
+    # Geen "ports": kobosync is alleen via de tunnel bereikbaar.
+    # Wil je thuis ook rechtstreeks kunnen synchroniseren, haal dan
+    # het hekje weg voor de twee regels hieronder.
+    # ports:
+    #   - "8085:8085"
+    volumes:
+      - ${LIBRARY_DIR:-./library}:/library
+      - ${DATA_DIR:-./data}:/data
+    environment:
+      KOBOSYNC_TOKEN: ${KOBOSYNC_TOKEN:?Zet KOBOSYNC_TOKEN in .env}
+      KOBOSYNC_PUBLIC_URL: https://${DOMAIN:?Zet DOMAIN in .env}
+      KOBOSYNC_PROXY_STORE: "true"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: kobosync-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Zet TUNNEL_TOKEN in .env}
+    depends_on:
+      - kobosync

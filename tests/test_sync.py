@@ -228,3 +228,18 @@ def test_proxy_mode_redirects_unknown_gets(tmp_path):
     resp = client.get(f"/kobo/{TOKEN}/00000000-0000-0000-0000-00000000abcd/100/200/false/image.jpg")
     assert resp.status_code == 307
     assert resp.headers["Location"].startswith("https://cdn.kobo.com/book-images/")
+
+
+def test_public_url_is_used_behind_a_proxy(tmp_path):
+    library = tmp_path / "library"
+    library.mkdir()
+    make_epub(library / "boek.epub")
+    cfg = Config(library_dir=library, data_dir=tmp_path / "data", auth_token=TOKEN, proxy_store=False,
+                 scan_interval=0, kepubify="none", public_url="https://kobo.example.org")
+    client = create_app(cfg).test_client()
+    # The proxy talks plain HTTP to kobosync, as Caddy and cloudflared do.
+    items, _, _ = sync(client)
+    url = items[0]["NewEntitlement"]["BookMetadata"]["DownloadUrls"][0]["Url"]
+    assert url.startswith(f"https://kobo.example.org/kobo/{TOKEN}/download/")
+    res = client.get(f"/kobo/{TOKEN}/v1/initialization").get_json()["Resources"]
+    assert res["image_url_template"].startswith(f"https://kobo.example.org/kobo/{TOKEN}/")

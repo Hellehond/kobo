@@ -1,0 +1,6 @@
+# Caddy vraagt automatisch een gratis HTTPS-certificaat aan bij Let's Encrypt
+# voor het domein uit .env en stuurt alles door naar kobosync.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy kobosync:8085
+}
