@@ -1,0 +1,17 @@
+services:
+  kobosync:
+    build: .
+    container_name: kobosync
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./library:/library   # zet hier je EPUB/KEPUB-bestanden
+      - ./data:/data         # database, covers, token
+    environment:
+      # Vul in als de e-readers de server via een andere url bereiken dan
+      # http://<ip>:8085 (bv. achter een reverse proxy).
+      # KOBOSYNC_PUBLIC_URL: https://kobo.example.org
+      # Zelf een token kiezen in plaats van het automatisch gegenereerde:
+      # KOBOSYNC_TOKEN: kiesietsgeheims
+      KOBOSYNC_PROXY_STORE: "true"
