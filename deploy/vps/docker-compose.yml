@@ -1,0 +1,36 @@
+# Optie 3: kobosync op een gehuurde server (VPS) met Caddy voor HTTPS.
+# Stappenplan: zie README.md in deze map.
+services:
+  kobosync:
+    build: ../..
+    container_name: kobosync
+    restart: unless-stopped
+    # Geen "ports": kobosync is alleen via Caddy bereikbaar.
+    volumes:
+      - ${LIBRARY_DIR:-./library}:/library
+      - ${DATA_DIR:-./data}:/data
+    environment:
+      KOBOSYNC_TOKEN: ${KOBOSYNC_TOKEN:?Zet KOBOSYNC_TOKEN in .env}
+      KOBOSYNC_PUBLIC_URL: https://${DOMAIN:?Zet DOMAIN in .env}
+      KOBOSYNC_PROXY_STORE: "true"
+
+  caddy:
+    image: caddy:2.8
+    container_name: kobosync-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - kobosync
+
+volumes:
+  caddy_data:
+  caddy_config:

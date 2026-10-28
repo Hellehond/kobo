@@ -33,6 +33,17 @@ kobosync speelt die rol voor je eigen boeken:
 
 ## Installeren
 
+Er zijn drie manieren om kobosync te draaien:
+
+| Manier | Synchroniseren | Kosten | Stappenplan |
+|---|---|---|---|
+| Thuis, alleen in je eigen netwerk | Alleen thuis | Geen | Hieronder |
+| Thuis, online via een Cloudflare Tunnel | Overal | Alleen een domeinnaam | [deploy/cloudflare-tunnel](deploy/cloudflare-tunnel/README.md) |
+| Gehuurde server met Caddy | Overal | Ongeveer 5 euro per maand plus domein | [deploy/vps](deploy/vps/README.md) |
+
+Kies je een van de online manieren, volg dan het stappenplan in die map en sla de rest
+van deze paragraaf over.
+
 ### Met Docker (aanbevolen)
 
 ```sh
@@ -117,8 +128,8 @@ Alles is in te stellen met omgevingsvariabelen:
 ## Beveiliging
 
 Het token in de URL is de enige toegangscontrole. Iedereen met die URL kan je boeken
-downloaden. Draai kobosync daarom alleen in je thuisnetwerk, of zet er een HTTPS
-reverse proxy voor als je buitenshuis wilt synchroniseren.
+downloaden. Draai kobosync daarom alleen in je thuisnetwerk, of zet het online met HTTPS
+volgens een van de stappenplannen in de map `deploy`. Deel de URL met niemand.
 
 ## Ontwikkeling
 
