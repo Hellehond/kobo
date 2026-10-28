@@ -1,1 +1,133 @@
-# kobo
+# kobosync
+
+Een kleine server die je thuis draait, zodat de leesvoortgang van je **eigen ebooks**
+(gekocht bij uitgeverijen, bol, Google Play zonder DRM, enz.) tussen je Kobo e-readers
+wordt gesynchroniseerd. Precies zoals dat nu al gebeurt voor boeken uit de Kobo store.
+
+## Waarom werkt het nu niet?
+
+Kobo synchroniseert de leespositie alleen voor boeken die via de Kobo-server op het
+toestel zijn gekomen. Een boek dat je via USB op de e-reader zet, kent de Kobo-server
+niet. Er is dus niemand om de positie aan door te geven.
+
+kobosync speelt die rol voor je eigen boeken:
+
+1. Je zet je EPUB-bestanden in één map op een computer of NAS.
+2. Beide e-readers praten met kobosync in plaats van rechtstreeks met Kobo.
+3. kobosync biedt je eigen boeken aan alsof ze in je Kobo-bibliotheek staan.
+   De e-readers downloaden ze en sturen de leespositie terug.
+4. Alles wat over echte Kobo-aankopen gaat, stuurt kobosync door naar Kobo.
+   De winkel, je gekochte boeken en hun synchronisatie blijven gewoon werken.
+
+## Wat heb je nodig?
+
+- Een computer, NAS of Raspberry Pi die aan staat wanneer je leest en die de e-readers
+  via wifi kunnen bereiken.
+- Python 3.9 of nieuwer, of Docker.
+- Je ebooks als EPUB of KEPUB **zonder DRM**. Boeken met Adobe-DRM kan geen enkel
+  programma zo aanbieden. Boeken met een watermerk (zoals de meeste Nederlandse
+  uitgeverijen gebruiken) werken prima.
+- Optioneel: [kepubify](https://pgaskin.net/kepubify/). Daarmee worden EPUB's omgezet
+  naar KEPUB, het eigen formaat van Kobo. Dat geeft een preciezere leespositie, de
+  "tijd tot einde hoofdstuk" en mooiere opmaak. Het Docker-image bevat kepubify al.
+
+## Installeren
+
+### Met Docker (aanbevolen)
+
+```sh
+git clone <deze repository> kobosync
+cd kobosync
+docker compose up -d
+docker compose logs kobosync     # toont de api_endpoint-regel voor je e-readers
+```
+
+Zet je boeken in de map `library` naast `docker-compose.yml`.
+
+### Zonder Docker
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m kobosync --library /pad/naar/boeken serve
+```
+
+Bij de start toont kobosync een regel zoals:
+
+```
+api_endpoint voor de e-readers: http://<ip-van-deze-machine>:8085/kobo/3f9c0e...
+```
+
+Het lange stuk na `/kobo/` is je persoonlijke token. Het staat ook in `data/token.txt`.
+
+## De e-readers instellen (op beide toestellen)
+
+1. Sluit de Kobo met USB aan op je computer.
+2. Open op het toestel het verborgen bestand `.kobo/Kobo/Kobo eReader.conf`.
+   Op een Mac zie je verborgen mappen met Cmd+Shift+punt.
+3. Zoek het blok `[OneStoreServices]` en vervang de regel die met `api_endpoint=`
+   begint door jouw adres, bijvoorbeeld:
+
+   ```
+   [OneStoreServices]
+   api_endpoint=http://192.168.1.20:8085/kobo/3f9c0e...
+   ```
+
+   Gebruik het IP-adres van de machine waar kobosync draait.
+   Bewaar de oude regel ergens, dan kun je altijd terug.
+4. Werp het toestel netjes uit en tik op **Synchroniseren**.
+
+Je eigen boeken verschijnen nu in je bibliotheek. Lees een stuk op het ene toestel,
+synchroniseer, en synchroniseer daarna het andere toestel. Dat opent het boek op
+dezelfde plek.
+
+Let op: als je het toestel ooit uitlogt of terugzet naar de fabrieksinstellingen,
+moet je stap 3 opnieuw doen.
+
+## Dagelijks gebruik
+
+- **Boek toevoegen:** zet het bestand in de bibliotheekmap. Submappen mogen.
+  Bij de volgende synchronisatie staat het op beide toestellen.
+- **Boek verwijderen:** haal het bestand uit de map. Het verdwijnt van beide toestellen.
+  Verwijder je het op een toestel zelf, dan verdwijnt het ook van het andere.
+  Terughalen kan met `python -m kobosync list` en `python -m kobosync restore <id>`.
+- **Overzicht:** open `http://<ip>:8085/kobo/<token>/status` in een browser. Je ziet
+  per boek de status en hoe ver je bent, en wanneer elk toestel voor het laatst
+  synchroniseerde.
+
+Boeken die al via USB op een toestel staan, worden niet automatisch gekoppeld.
+Verwijder die USB-kopie en laat het boek via kobosync binnenkomen. De leespositie van
+de USB-kopie neemt Kobo niet mee.
+
+## Instellingen
+
+Alles is in te stellen met omgevingsvariabelen:
+
+| Variabele | Standaard | Betekenis |
+|---|---|---|
+| `KOBOSYNC_LIBRARY` | `./library` | Map met je EPUB/KEPUB-bestanden |
+| `KOBOSYNC_DATA` | `./data` | Database, covers, omgezette bestanden en token |
+| `KOBOSYNC_TOKEN` | automatisch | Eigen token in plaats van het gegenereerde |
+| `KOBOSYNC_PUBLIC_URL` | leeg | Adres waarlangs de e-readers de server bereiken, nodig achter een reverse proxy |
+| `KOBOSYNC_PROXY_STORE` | `true` | Op `false` zetten om niets naar Kobo door te sturen. Dan werken winkel en Kobo-aankopen niet meer. |
+| `KOBOSYNC_PORT` | `8085` | Poort |
+| `KOBOSYNC_KEPUBIFY` | zoekt in PATH | Pad naar kepubify, of `none` om het uit te zetten |
+| `KOBOSYNC_SCAN_INTERVAL` | `30` | Hoe vaak (seconden) de map hooguit opnieuw wordt gelezen |
+
+## Beveiliging
+
+Het token in de URL is de enige toegangscontrole. Iedereen met die URL kan je boeken
+downloaden. Draai kobosync daarom alleen in je thuisnetwerk, of zet er een HTTPS
+reverse proxy voor als je buitenshuis wilt synchroniseren.
+
+## Ontwikkeling
+
+```sh
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+De server implementeert het deel van de Kobo store-API dat e-readers voor hun
+bibliotheek gebruiken: `/v1/library/sync`, de reading state (`/v1/library/<id>/state`),
+metadata, covers en downloads. Al het andere wordt naar `storeapi.kobo.com` doorgestuurd.
+De aanpak is dezelfde als die van de Kobo-sync in Calibre-Web.
