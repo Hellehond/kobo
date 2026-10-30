@@ -101,6 +101,9 @@ Alle opdrachten op een rij staan in de [cheatsheet](CHEATSHEET.md).
 
 
 - **Boek toevoegen:** zet het bestand in de bibliotheekmap. Een submap wordt een collectie.
+- **Boek verplaatsen of map hernoemen:** mag gewoon. kobosync herkent het boek aan de inhoud
+  van het bestand, dus de leesvoortgang blijft bewaard en het boek verhuist mee naar de
+  nieuwe collectie.
   Bij de volgende synchronisatie staat het op beide toestellen.
 - **Boek verwijderen:** haal het bestand uit de map. Het verdwijnt van beide toestellen.
   Verwijder je het op een toestel zelf, dan verdwijnt het ook van het andere.
