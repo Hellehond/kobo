@@ -1,7 +1,9 @@
 """Keeps the SQLite catalogue in step with the files in the library folder."""
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
 import subprocess
 import threading
 import time
@@ -21,6 +23,14 @@ log = logging.getLogger(__name__)
 # processed again on the next scan.
 PROCESSING_VERSION = 2
 COLLECTION_SEPARATOR = " / "
+
+
+def file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def detect_format(path: Path) -> Optional[str]:
@@ -71,21 +81,35 @@ class Library:
             self._lock.release()
 
     def _scan(self) -> Dict[str, int]:
-        stats = {"added": 0, "updated": 0, "restored": 0, "missing": 0}
-        seen = set()
+        stats = {"added": 0, "updated": 0, "moved": 0, "restored": 0, "missing": 0}
         root = self.cfg.library_dir
+        on_disk: Dict[str, Tuple[Path, str, os.stat_result]] = {}
         for path in sorted(p for p in root.rglob("*") if p.is_file()):
             fmt = detect_format(path)
             if fmt is None:
                 continue
-            rel = path.relative_to(root).as_posix()
-            seen.add(rel)
             try:
-                st = path.stat()
+                on_disk[path.relative_to(root).as_posix()] = (path, fmt, path.stat())
             except OSError:
                 continue
+
+        # Books whose file is no longer where we last saw it.  A new file with
+        # the same content is the same book, moved or in a renamed folder.
+        gone = [b for b in self.db.all_books() if b["path"] not in on_disk]
+        claimed = set()
+
+        for rel, (path, fmt, st) in on_disk.items():
             existing = self.db.book_by_path(rel)
             if existing is None:
+                moved = self._find_moved(path, st.st_size, gone, claimed)
+                if moved is not None:
+                    claimed.add(moved["id"])
+                    log.info("%s moved to %s; keeping its reading progress", moved["path"], rel)
+                    self._import(path, rel, fmt, st.st_size, st.st_mtime, moved)
+                    stats["moved"] += 1
+                    if moved["archived"] and moved["archived_reason"] == "missing":
+                        self.db.restore_book(moved["id"])
+                    continue
                 self._import(path, rel, fmt, st.st_size, st.st_mtime, None)
                 stats["added"] += 1
                 continue
@@ -99,8 +123,8 @@ class Library:
                 stats["restored"] += 1
                 log.info("Restored %s (file is back)", rel)
 
-        for book in self.db.all_books(include_archived=False):
-            if book["path"] not in seen:
+        for book in gone:
+            if book["id"] not in claimed and not book["archived"]:
                 self.db.archive_book(book["id"], "missing")
                 stats["missing"] += 1
                 log.info("Archived %s (file removed from library)", book["path"])
@@ -108,6 +132,19 @@ class Library:
             log.info("Library scan: %s", ", ".join(f"{k}={v}" for k, v in stats.items()))
         self.reconcile_collections()
         return stats
+
+    @staticmethod
+    def _find_moved(path: Path, size: int, gone, claimed) -> Optional[Dict[str, Any]]:
+        candidates = [b for b in gone if b["id"] not in claimed and b["size"] == size]
+        if not candidates:
+            return None
+        digest = file_hash(path)
+        for book in candidates:
+            if book.get("content_hash") == digest:
+                return book
+        # Books imported before hashes were stored: accept a unique size match.
+        legacy = [b for b in candidates if not b.get("content_hash")]
+        return legacy[0] if len(legacy) == 1 and len(candidates) == 1 else None
 
     def _import(self, path: Path, rel: str, fmt: str, size: int, mtime: float,
                 existing: Optional[Dict[str, Any]]) -> int:
@@ -134,7 +171,7 @@ class Library:
             pubdate=parse_loose_date(meta.pubdate), isbn=meta.isbn,
             series=meta.series, series_index=meta.series_index, cover=cover_name,
             processed_path=processed.name if report.changed else None,
-            kepub_path=None, proc_key=self.proc_key,
+            kepub_path=None, proc_key=self.proc_key, content_hash=file_hash(path),
         )
         if fmt == "EPUB" and self.cfg.kepubify:
             fields["kepub_path"] = self._convert_kepub(source, book_uuid)

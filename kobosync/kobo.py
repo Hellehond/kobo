@@ -22,6 +22,9 @@ log = logging.getLogger(__name__)
 bp = Blueprint("kobo", __name__, url_prefix="/kobo/<auth_token>")
 
 SYNC_ITEM_LIMIT = 100
+# Bump when the collection JSON changes, so every device gets its folder
+# collections again.  2: items are typed "ProductRevisionTagItem".
+TAG_FORMAT = "2"
 READ_STATUSES = ("ReadyToRead", "Reading", "Finished")
 ALL_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
 
@@ -56,6 +59,9 @@ def _pull_auth_token(endpoint, values):
 def _check_auth_token():
     if not hmac.compare_digest(g.get("auth_token", ""), ctx().cfg.auth_token):
         abort(401)
+    if "/v1/library/tags" in request.path:
+        log.info("Collection request from device %s: %s %s %s", request.headers.get("X-Kobo-DeviceId", "?"),
+                 request.method, request.path.split("/v1/", 1)[-1], request.get_data(as_text=True)[:500])
     device_id = request.headers.get("X-Kobo-DeviceId")
     if device_id:
         try:
@@ -185,7 +191,7 @@ def tag_response(tag: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "Created": to_kobo_timestamp(tag["created"]),
         "Id": tag["uuid"],
-        "Items": [{"RevisionId": uuid, "Type": "ProductRevisionTag"} for uuid in tag["items"]],
+        "Items": [{"RevisionId": uuid, "Type": "ProductRevisionTagItem"} for uuid in tag["items"]],
         "LastModified": to_kobo_timestamp(tag["modified"]),
         "Name": tag["name"],
         "Type": "UserTag",
@@ -198,13 +204,15 @@ def collection_results(token: SyncToken, new_token: SyncToken) -> List[Dict[str,
         new_token.tags_last_modified = max(new_token.tags_last_modified, tag["modified"])
         device_knows_it = tag["created"] <= token.tags_last_modified
         if tag["deleted"]:
-            if device_knows_it:
-                results.append({"DeletedTag": {"Tag": {
-                    "Id": tag["uuid"], "LastModified": to_kobo_timestamp(tag["modified"])}}})
-        elif device_knows_it:
-            results.append({"ChangedTag": {"Tag": tag_response(tag)}})
+            if not device_knows_it:
+                continue
+            kind = "DeletedTag"
+            body = {"Id": tag["uuid"], "LastModified": to_kobo_timestamp(tag["modified"])}
         else:
-            results.append({"NewTag": {"Tag": tag_response(tag)}})
+            kind = "ChangedTag" if device_knows_it else "NewTag"
+            body = tag_response(tag)
+        results.append({kind: {"Tag": body}})
+        log.info("Collection '%s' sent as %s with %d book(s)", tag["name"], kind, len(tag["items"]))
     return results
 
 
@@ -376,6 +384,9 @@ def _folder_tag_or_store(tag_id: str):
     tag = ctx().db.tag_by_uuid(tag_id)
     if tag is None or tag["source"] != "folder":
         return None, store.redirect_or_proxy(ctx().cfg)
+    if tag["deleted"]:
+        # The folder is gone and the device is cleaning up: nothing to re-send.
+        return tag, None
     ctx().db.update_tag(tag["id"])  # bump: re-send the folder's version
     log.info("Device %s tried to change folder collection '%s'; it will be restored on the next sync",
              request.headers.get("X-Kobo-DeviceId", "?"), tag["name"])
@@ -389,6 +400,7 @@ def tag_change(tag_id):
 
 
 @bp.route("/v1/library/tags/<tag_id>/items", methods=["POST"])
+@bp.route("/v1/library/tags/<tag_id>/Items", methods=["POST"])
 @bp.route("/v1/library/tags/<tag_id>/items/delete", methods=["POST"])
 def tag_items(tag_id):
     tag, fallback = _folder_tag_or_store(tag_id)

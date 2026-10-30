@@ -242,7 +242,7 @@ def test_folders_become_collections(server):
     book_ids = {i["NewEntitlement"]["BookMetadata"]["Title"] and i["NewEntitlement"]["BookEntitlement"]["Id"]
                 for i in items if "NewEntitlement" in i}
     assert len(book_ids) == 3
-    assert tag["Items"][0]["Type"] == "ProductRevisionTag"
+    assert tag["Items"][0]["Type"] == "ProductRevisionTagItem"
     assert tag["Items"][0]["RevisionId"] in book_ids
     # Tags come after the books they refer to.
     assert all("NewEntitlement" in i for i in items[:3])
@@ -334,3 +334,115 @@ def test_changed_settings_reprocess_books(tmp_path):
     path, _ = app.extensions["kobosync"].library.file_for_book(book)
     assert path.parent.name == "processed"
     assert spine_of(path) == ["ch1", "ch2", "colofon"]
+
+
+# ------------------------------------------------- issue 12 and moved books
+
+def test_collection_items_use_the_type_kobo_expects(server):
+    _, client, _ = server
+    items, _ = sync(client)
+    for kind, tag in tags_in(items).values():
+        assert {i["Type"] for i in tag["Items"]} == {"ProductRevisionTagItem"}
+
+
+def test_old_collections_are_resent_after_upgrade(server):
+    app, client, library = server
+    items, token = sync(client)
+    assert sync(client, token)[0] == []
+    db = app.extensions["kobosync"].db
+    db.set_meta("tag_format", "1")  # as written by the previous version
+    client2 = create_app(app.extensions["kobosync"].cfg).test_client()
+    items, token = sync(client2, token)
+    assert {k for k, _ in tags_in(items).values()} == {"ChangedTag"}
+    assert sync(client2, token)[0] == []
+
+
+def set_progress(client, uuid, pct):
+    client.put(f"/kobo/{TOKEN}/v1/library/{uuid}/state", json={"ReadingStates": [{
+        "CurrentBookmark": {"ProgressPercent": pct}}]})
+
+
+def test_moving_a_book_keeps_it_and_its_progress(server):
+    app, client, library = server
+    items, token = sync(client)
+    books = {i["NewEntitlement"]["BookMetadata"]["Title"]: i["NewEntitlement"]["BookEntitlement"]["Id"]
+             for i in items if "NewEntitlement" in i}
+    db = app.extensions["kobosync"].db
+    los = db.book_by_path("los.epub")
+    set_progress(client, los["uuid"], 55)
+    _, token = sync(client, token)
+
+    (library / "los.epub").rename(library / "Romans" / "los.epub")
+    items, token = sync(client, token)
+    assert not any("NewEntitlement" in i for i in items)
+    changed = [i["ChangedEntitlement"]["BookEntitlement"] for i in items if "ChangedEntitlement" in i]
+    assert [(e["Id"], e["IsRemoved"]) for e in changed] == [(los["uuid"], False)]
+    romans = tags_in(items)["Romans"][1]
+    assert los["uuid"] in {i["RevisionId"] for i in romans["Items"]}
+    state = client.get(f"/kobo/{TOKEN}/v1/library/{los['uuid']}/state").get_json()[0]
+    assert state["CurrentBookmark"]["ProgressPercent"] == 55
+    assert len(db.all_books()) == 3
+
+
+def test_renaming_a_folder_keeps_the_books(server):
+    app, client, library = server
+    items, token = sync(client)
+    db = app.extensions["kobosync"].db
+    before = {b["uuid"] for b in db.all_books()}
+    (library / "Thrillers").rename(library / "Spanning")
+    items, token = sync(client, token)
+    assert {b["uuid"] for b in db.all_books()} == before
+    assert not any(b["archived"] for b in db.all_books())
+    kinds = {name: kind for name, (kind, _) in tags_in(items).items()}
+    assert kinds.get("Spanning / Noors") == "NewTag"
+    assert "DeletedTag" in kinds.values()
+
+
+def test_identical_copies_stay_separate_books(server):
+    app, client, library = server
+    sync(client)
+    import shutil
+    shutil.copy(library / "los.epub", library / "Romans" / "kopie.epub")
+    app.extensions["kobosync"].library.scan()
+    assert len(app.extensions["kobosync"].db.all_books()) == 4
+
+
+def test_books_without_hash_are_matched_by_size(server):
+    app, client, library = server
+    sync(client)
+    db = app.extensions["kobosync"].db
+    los = db.book_by_path("los.epub")
+    db.update_book(los["id"], touch=False, content_hash=None)  # imported by an older version
+    (library / "los.epub").rename(library / "Romans" / "los.epub")
+    app.extensions["kobosync"].library.scan()
+    assert db.book_by_path("Romans/los.epub")["uuid"] == los["uuid"]
+
+
+def test_book_removed_on_device_stays_removed_after_a_move(server):
+    app, client, library = server
+    items, token = sync(client)
+    db = app.extensions["kobosync"].db
+    los = db.book_by_path("los.epub")
+    client.delete(f"/kobo/{TOKEN}/v1/library/{los['uuid']}")
+    (library / "los.epub").rename(library / "Romans" / "los.epub")
+    app.extensions["kobosync"].library.scan()
+    moved = db.book_by_path("Romans/los.epub")
+    assert moved["uuid"] == los["uuid"] and moved["archived"] and moved["archived_reason"] == "device"
+
+
+def test_capitalised_items_route_is_handled(server):
+    _, client, _ = server
+    items, _ = sync(client)
+    tag = tags_in(items)["Romans"][1]
+    assert client.post(f"/kobo/{TOKEN}/v1/library/tags/{tag['Id']}/Items", json={"Items": []}).status_code == 201
+
+
+def test_deleting_an_already_deleted_collection_is_not_echoed(server):
+    app, client, library = server
+    items, token = sync(client)
+    romans = tags_in(items)["Romans"][1]
+    (library / "Romans" / "tetris.epub").unlink()
+    items, token = sync(client, token)
+    assert tags_in(items)[romans["Id"]][0] == "DeletedTag"
+    assert client.delete(f"/kobo/{TOKEN}/v1/library/tags/{romans['Id']}").status_code == 200
+    assert sync(client, token)[0] == []

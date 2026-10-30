@@ -67,6 +67,11 @@ CREATE TABLE IF NOT EXISTS tags (
     deleted INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS devices (
     device_id TEXT PRIMARY KEY,
     user_agent TEXT,
@@ -78,7 +83,7 @@ CREATE TABLE IF NOT EXISTS devices (
 
 BOOK_COLUMNS = (
     "uuid", "path", "format", "size", "mtime", "title", "authors", "language", "publisher",
-    "description", "pubdate", "isbn", "series", "series_index", "cover", "kepub_path", "processed_path", "proc_key",
+    "description", "pubdate", "isbn", "series", "series_index", "cover", "kepub_path", "processed_path", "proc_key", "content_hash",
     "created", "modified", "archived", "archived_reason", "archived_at",
 )
 
@@ -119,6 +124,7 @@ class Database:
     MIGRATIONS = (
         ("books", "processed_path", "TEXT"),
         ("books", "proc_key", "TEXT"),
+        ("books", "content_hash", "TEXT"),
     )
 
     def init_schema(self) -> None:
@@ -289,6 +295,22 @@ class Database:
         with closing(self._connect()) as con:
             return [self._tag(r) for r in con.execute(
                 "SELECT * FROM tags WHERE modified > ? ORDER BY modified, id", (since,))]
+
+    def bump_tags(self, source: str = "folder") -> int:
+        with closing(self._connect()) as con:
+            return con.execute("UPDATE tags SET modified = ? WHERE source = ?", (now(), source)).rowcount
+
+    # ------------------------------------------------------------------- meta
+
+    def get_meta(self, key: str) -> Optional[str]:
+        with closing(self._connect()) as con:
+            row = con.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        with closing(self._connect()) as con:
+            con.execute("INSERT INTO meta (key, value) VALUES (?, ?) "
+                        "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
 
     # ---------------------------------------------------------------- devices
 

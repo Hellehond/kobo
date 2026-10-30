@@ -51,7 +51,8 @@ docker compose exec kobosync python -m kobosync restore 12   # boek 12 terugzett
 - **Verwijderen:** haal het bestand uit je boekenmap. Het verdwijnt van beide Kobo's.
 - **Terughalen na verwijderen op een Kobo:** zoek het nummer met `list` en gebruik `restore`.
   Staat er "missing" achter het boek, zet dan het bestand terug in de boekenmap.
-- **Collectie hernoemen:** hernoem de map.
+- **Collectie hernoemen:** hernoem de map. De boeken en hun leesvoortgang gaan mee.
+- **Boek naar een andere collectie:** verplaats het bestand naar de andere map.
 
 Welke map je boekenmap en je datamap is:
 
@@ -144,6 +145,7 @@ Vervang `docker compose exec kobosync python` door `.venv/bin/python`, en geef d
 | Kobo synchroniseert niet | `docker compose logs -f kobosync` en dan synchroniseren op de Kobo. Zie je niets binnenkomen, dan klopt de regel `api_endpoint=` niet of is de server niet bereikbaar. |
 | Nieuw boek verschijnt niet | `python -m kobosync scan` uitvoeren en het bestand controleren: alleen `.epub` en `.kepub.epub` worden gelezen. |
 | Boek staat er dubbel | Het boek stond er al via USB. Verwijder de USB-kopie op de Kobo. |
+| Collectie is leeg op de Kobo | Kijk in de logs naar regels met "Collection". Daar staat hoeveel boeken kobosync in elke collectie heeft gestuurd. |
 | `git pull` vraagt om een wachtwoord | De repository is privé. Stel een deploy key in, zie hieronder. |
 | Cloudflare-fout 502 | `docker compose logs cloudflared`, en controleer dat de Public Hostname naar `kobosync:8085` wijst. |
 | Geen HTTPS-certificaat op de server | `docker compose logs caddy`, en controleer het A-record en poort 80 en 443. |
