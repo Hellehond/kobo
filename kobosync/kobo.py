@@ -181,12 +181,40 @@ def reading_state_response(book: Dict[str, Any], state: Dict[str, Any]) -> Dict[
     }
 
 
+def tag_response(tag: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "Created": to_kobo_timestamp(tag["created"]),
+        "Id": tag["uuid"],
+        "Items": [{"RevisionId": uuid, "Type": "ProductRevisionTag"} for uuid in tag["items"]],
+        "LastModified": to_kobo_timestamp(tag["modified"]),
+        "Name": tag["name"],
+        "Type": "UserTag",
+    }
+
+
+def collection_results(token: SyncToken, new_token: SyncToken) -> List[Dict[str, Any]]:
+    results = []
+    for tag in ctx().db.changed_tags(token.tags_last_modified):
+        new_token.tags_last_modified = max(new_token.tags_last_modified, tag["modified"])
+        device_knows_it = tag["created"] <= token.tags_last_modified
+        if tag["deleted"]:
+            if device_knows_it:
+                results.append({"DeletedTag": {"Tag": {
+                    "Id": tag["uuid"], "LastModified": to_kobo_timestamp(tag["modified"])}}})
+        elif device_knows_it:
+            results.append({"ChangedTag": {"Tag": tag_response(tag)}})
+        else:
+            results.append({"NewTag": {"Tag": tag_response(tag)}})
+    return results
+
+
 # ------------------------------------------------------------------- sync
 
 @bp.route("/v1/library/sync")
 def library_sync():
     c = ctx()
     c.library.scan_if_due()
+    c.library.reconcile_collections()  # a device may have removed a book
     token = SyncToken.from_headers(request.headers)
     new_token = token.copy()
     results: List[Dict[str, Any]] = []
@@ -232,7 +260,10 @@ def library_sync():
     headers: Dict[str, str] = {}
     if more:
         headers["x-kobo-sync"] = "continue"
-    elif c.cfg.proxy_store:
+    else:
+        # Collections only once all their books have been delivered.
+        results.extend(collection_results(token, new_token))
+    if not more and c.cfg.proxy_store:
         # Our own page is complete, so merge in whatever the real store has.
         try:
             upstream = store.forward(c.cfg.auth_token, c.cfg.store_timeout, sync_token=token)
@@ -334,6 +365,36 @@ def library_delete(book_uuid):
     return "", 204
 
 
+# -------------------------------------------------------------- collections
+#
+# Folder collections are managed through the library folders.  When a device
+# renames, empties or deletes one, the request is acknowledged and the
+# collection is re-sent on the next sync, so all devices stay in line with the
+# folders.  Requests about any other collection go to the Kobo store.
+
+def _folder_tag_or_store(tag_id: str):
+    tag = ctx().db.tag_by_uuid(tag_id)
+    if tag is None or tag["source"] != "folder":
+        return None, store.redirect_or_proxy(ctx().cfg)
+    ctx().db.update_tag(tag["id"])  # bump: re-send the folder's version
+    log.info("Device %s tried to change folder collection '%s'; it will be restored on the next sync",
+             request.headers.get("X-Kobo-DeviceId", "?"), tag["name"])
+    return tag, None
+
+
+@bp.route("/v1/library/tags/<tag_id>", methods=["DELETE", "PUT"])
+def tag_change(tag_id):
+    tag, fallback = _folder_tag_or_store(tag_id)
+    return fallback if fallback is not None else ("", 200)
+
+
+@bp.route("/v1/library/tags/<tag_id>/items", methods=["POST"])
+@bp.route("/v1/library/tags/<tag_id>/items/delete", methods=["POST"])
+def tag_items(tag_id):
+    tag, fallback = _folder_tag_or_store(tag_id)
+    return fallback if fallback is not None else ("", 201)
+
+
 @bp.route("/download/<int:book_id>/<fmt>")
 def download(book_id, fmt):
     c = ctx()
@@ -377,6 +438,12 @@ def initialization():
     if not resources:
         resources = dict(NATIVE_KOBO_RESOURCES)
     prefix = api_prefix()
+    # Route collection requests through us, so changes to folder collections
+    # are seen here; requests about Kobo's own collections are passed on.
+    for key in ("tags", "tag_items", "delete_tag", "delete_tag_items", "rename_tag"):
+        value = resources.get(key)
+        if isinstance(value, str) and value.startswith(store.STORE_API_URL):
+            resources[key] = prefix + value[len(store.STORE_API_URL):]
     resources["image_host"] = base_url()
     resources["image_url_quality_template"] = (
         prefix + "/{ImageId}/{Width}/{Height}/{Quality}/isGreyscale/image.jpg")

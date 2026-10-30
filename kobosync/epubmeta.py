@@ -48,6 +48,33 @@ def _attr(el: ET.Element, name: str) -> Optional[str]:
     return None
 
 
+# "A en B", "A og B", "A & B", "A, B and C" ...
+_AUTHOR_CONJUNCTION = re.compile(r"\s+(?:en|og|and|und|et|och|y|e|&)\s+|\s*;\s*", re.IGNORECASE)
+
+
+def split_authors(names: List[str]) -> List[str]:
+    """Split creator fields that hold several people, such as
+    "Thomas Heerma van Voss en Maartje Wortel".
+
+    A name is only split when every resulting part looks like a full name
+    (at least two words), so "Wortel, Maartje" and "Jan en Annie" stay intact.
+    """
+    result: List[str] = []
+    for name in names:
+        parts = [name]
+        if _AUTHOR_CONJUNCTION.search(name):
+            pieces = [p.strip() for p in _AUTHOR_CONJUNCTION.split(name) if p and p.strip()]
+            expanded: List[str] = []
+            for piece in pieces:
+                expanded.extend(c.strip() for c in piece.split(",") if c.strip())
+            if len(expanded) > 1 and all(len(p.split()) >= 2 for p in expanded):
+                parts = expanded
+        for part in parts:
+            if part not in result:
+                result.append(part)
+    return result
+
+
 def title_from_filename(path: Path) -> str:
     name = path.name
     for suffix in (".kepub.epub", ".kepub", ".epub"):
@@ -118,7 +145,7 @@ def _find_cover_href(root: ET.Element, metadata: Optional[ET.Element], manifest:
     return None
 
 
-def read_metadata(path: Path) -> BookMeta:
+def read_metadata(path: Path, split: bool = True) -> BookMeta:
     meta = BookMeta(title=title_from_filename(path))
     try:
         with zipfile.ZipFile(path) as zf:
@@ -128,6 +155,8 @@ def read_metadata(path: Path) -> BookMeta:
             manifest = next((c for c in root if _local(c.tag) == "manifest"), None)
             if metadata is not None:
                 _parse_metadata(metadata, meta)
+                if split:
+                    meta.authors = split_authors(meta.authors)
             cover = _find_cover_href(root, metadata, manifest)
             if cover:
                 href, media = cover
@@ -148,13 +177,22 @@ def _parse_metadata(metadata: ET.Element, meta: BookMeta) -> None:
     titles: List[str] = []
     collections = {}  # id -> {"name":..., "type":..., "position":...}
     refinements = []
+    roles = {}  # creator id -> role (EPUB 3 refinements)
+    other_creators: List[str] = []
+    for el in metadata:
+        if _local(el.tag) == "meta" and el.get("property") == "role" and el.get("refines"):
+            roles[el.get("refines").lstrip("#")] = (el.text or "").strip().lower()
     for el in metadata:
         tag = _local(el.tag)
         text = (el.text or "").strip()
         if tag == "title" and text:
             titles.append(text)
         elif tag == "creator" and text:
-            meta.authors.append(text)
+            role = (_attr(el, "role") or roles.get(el.get("id") or "", "")).lower()
+            if role in ("", "aut"):
+                meta.authors.append(text)
+            else:
+                other_creators.append(text)
         elif tag == "language" and text and not meta.language:
             meta.language = text
         elif tag == "publisher" and text and not meta.publisher:
@@ -200,6 +238,8 @@ def _parse_metadata(metadata: ET.Element, meta: BookMeta) -> None:
                 except ValueError:
                     meta.series_index = None
                 break
+    if not meta.authors:
+        meta.authors = other_creators
     if titles:
         meta.title = titles[0]
     if meta.language:

@@ -11,10 +11,16 @@ from typing import Any, Dict, Optional, Tuple
 
 from .config import Config
 from .db import Database
+from . import epubfix
 from .epubmeta import read_metadata
 from .util import parse_loose_date
 
 log = logging.getLogger(__name__)
+
+# Bump when the way books are processed changes, so existing books are
+# processed again on the next scan.
+PROCESSING_VERSION = 2
+COLLECTION_SEPARATOR = " / "
 
 
 def detect_format(path: Path) -> Optional[str]:
@@ -34,6 +40,18 @@ class Library:
         self.db = db
         self._lock = threading.Lock()
         self._last_scan = 0.0
+
+    @property
+    def proc_key(self) -> str:
+        c = self.cfg
+        flags = [
+            f"v{PROCESSING_VERSION}",
+            f"split={int(c.split_authors)}",
+            f"css={int(c.fix_styles)}",
+            f"front={int(c.move_front_matter)}",
+            f"kepub={int(bool(c.kepubify))}",
+        ]
+        return ";".join(flags)
 
     # ----------------------------------------------------------------- scanning
 
@@ -71,7 +89,8 @@ class Library:
                 self._import(path, rel, fmt, st.st_size, st.st_mtime, None)
                 stats["added"] += 1
                 continue
-            changed = existing["size"] != st.st_size or abs(existing["mtime"] - st.st_mtime) > 1e-6
+            changed = (existing["size"] != st.st_size or abs(existing["mtime"] - st.st_mtime) > 1e-6
+                       or existing.get("proc_key") != self.proc_key)
             if changed:
                 self._import(path, rel, fmt, st.st_size, st.st_mtime, existing)
                 stats["updated"] += 1
@@ -87,27 +106,38 @@ class Library:
                 log.info("Archived %s (file removed from library)", book["path"])
         if any(stats.values()):
             log.info("Library scan: %s", ", ".join(f"{k}={v}" for k, v in stats.items()))
+        self.reconcile_collections()
         return stats
 
     def _import(self, path: Path, rel: str, fmt: str, size: int, mtime: float,
                 existing: Optional[Dict[str, Any]]) -> int:
-        meta = read_metadata(path)
+        meta = read_metadata(path, split=self.cfg.split_authors)
         book_uuid = existing["uuid"] if existing else str(uuidlib.uuid4())
         cover_name = None
         if meta.cover:
             data, ext = meta.cover
             cover_name = f"{book_uuid}{ext}"
             (self.cfg.covers_dir / cover_name).write_bytes(data)
+
+        # A cleaned-up copy, if the book needs one, then KEPUB conversion of
+        # whichever version is served.
+        processed = self.cfg.processed_dir / f"{book_uuid}.epub"
+        report = epubfix.process(path, processed, fix_styles=self.cfg.fix_styles,
+                                 move_front_matter=self.cfg.move_front_matter)
+        source = processed if report.changed else path
+        log.info("%s: %s", rel, report.summary())
+
         fields = dict(
             path=rel, format=fmt, size=size, mtime=mtime,
             title=meta.title, authors=meta.authors or ["Onbekend"],
             language=meta.language, publisher=meta.publisher, description=meta.description,
             pubdate=parse_loose_date(meta.pubdate), isbn=meta.isbn,
             series=meta.series, series_index=meta.series_index, cover=cover_name,
-            kepub_path=None,
+            processed_path=processed.name if report.changed else None,
+            kepub_path=None, proc_key=self.proc_key,
         )
         if fmt == "EPUB" and self.cfg.kepubify:
-            fields["kepub_path"] = self._convert_kepub(path, book_uuid)
+            fields["kepub_path"] = self._convert_kepub(source, book_uuid)
         if existing:
             self.db.update_book(existing["id"], **fields)
             log.info("Updated %s (%s)", meta.title, rel)
@@ -140,4 +170,42 @@ class Library:
             kepub = self.cfg.kepub_dir / book["kepub_path"]
             if kepub.exists():
                 return kepub, "KEPUB"
+        if book.get("processed_path"):
+            processed = self.cfg.processed_dir / book["processed_path"]
+            if processed.exists():
+                return processed, book["format"]
         return self.cfg.library_dir / book["path"], book["format"]
+
+    # ------------------------------------------------------------- collections
+
+    @staticmethod
+    def collection_name(rel_path: str) -> Optional[str]:
+        """"Thrillers/Noors/arr.epub" -> "Thrillers / Noors"; books in the root have none."""
+        parts = rel_path.split("/")[:-1]
+        return COLLECTION_SEPARATOR.join(parts) if parts else None
+
+    def reconcile_collections(self) -> None:
+        """Make the folder collections match the folders the (active) books are in."""
+        desired: Dict[str, list] = {}
+        if self.cfg.folder_collections:
+            for book in self.db.all_books(include_archived=False):
+                name = self.collection_name(book["path"])
+                if name:
+                    desired.setdefault(name, []).append(book["uuid"])
+        for items in desired.values():
+            items.sort()
+        existing = {t["name"]: t for t in self.db.all_tags(source="folder")}
+        for name, items in desired.items():
+            tag = existing.get(name)
+            if tag is None:
+                self.db.insert_tag(str(uuidlib.uuid4()), name, items)
+                log.info("Collection '%s' created (%d book(s))", name, len(items))
+            elif tag["deleted"]:
+                # The folder is back: offer it to the devices as a new collection again.
+                self.db.update_tag(tag["id"], items=items, deleted=0, created=time.time())
+            elif tag["items"] != items:
+                self.db.update_tag(tag["id"], items=items)
+        for name, tag in existing.items():
+            if name not in desired and not tag["deleted"]:
+                self.db.update_tag(tag["id"], items=[], deleted=1)
+                log.info("Collection '%s' removed (folder is empty or gone)", name)

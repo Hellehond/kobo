@@ -97,7 +97,7 @@ moet je stap 3 opnieuw doen.
 
 ## Dagelijks gebruik
 
-- **Boek toevoegen:** zet het bestand in de bibliotheekmap. Submappen mogen.
+- **Boek toevoegen:** zet het bestand in de bibliotheekmap. Een submap wordt een collectie.
   Bij de volgende synchronisatie staat het op beide toestellen.
 - **Boek verwijderen:** haal het bestand uit de map. Het verdwijnt van beide toestellen.
   Verwijder je het op een toestel zelf, dan verdwijnt het ook van het andere.
@@ -105,6 +105,36 @@ moet je stap 3 opnieuw doen.
 - **Overzicht:** open `http://<ip>:8085/kobo/<token>/status` in een browser. Je ziet
   per boek de status en hoe ver je bent, en wanneer elk toestel voor het laatst
   synchroniseerde.
+
+## Wat kobosync aan je boeken verbetert
+
+kobosync geeft de Kobo's een verbeterde kopie van elk boek. Je originele bestanden
+blijven altijd ongewijzigd. Boeken met vaste opmaak, zoals stripboeken en kinderboeken
+met plaatjes, en boeken met DRM worden niet aangepast.
+
+- **Auteurs apart.** Een auteursveld als "Thomas Heerma van Voss en Maartje Wortel" wordt
+  opgesplitst in twee auteurs. Dat werkt ook met "og", "and", "&" en een puntkomma.
+  Illustratoren en vertalers tellen niet meer als auteur.
+- **Mappen worden collecties.** Een boek in de map `Thrillers` komt op beide Kobo's in de
+  collectie "Thrillers". Submappen worden "Thrillers / Noors". Boeken direct in de
+  bibliotheekmap komen in geen collectie. Je beheert deze collecties via de mappen:
+  wijzig je er een op de Kobo, dan zet de volgende synchronisatie hem terug.
+  Collecties die je zelf op de Kobo maakt, blijven gewoon via Kobo werken.
+- **Je eigen lettergrootte en marges werken overal.** Vaste maten die uitgevers in hun
+  opmaak zetten, zoals `font-size: 14px`, worden omgezet naar relatieve maten. Dan
+  reageren alle pagina's op de instellingen van je Kobo.
+- **Het boek opent bij het begin.** Rechtenpagina's, watermerkpagina's en colofons aan
+  het begin van een boek gaan naar het einde. De cover, de titelpagina, de opdracht en
+  het motto blijven op hun plek.
+
+Elk onderdeel kun je uitzetten, zie de instellingen hieronder. Verander je een instelling,
+dan verwerkt kobosync alle boeken opnieuw.
+
+Staat een boek al op je Kobo, dan krijgt het de nieuwe versie pas als je het opnieuw
+downloadt. Houd het boek op de Kobo ingedrukt, kies verwijderen, en kies dan de optie die
+alleen de download van dit toestel verwijdert. Kies niet de optie die het boek uit je
+bibliotheek haalt, want dan verdwijnt het van beide toestellen. Tik daarna weer op het
+boek om het te downloaden. Je leespositie blijft bewaard.
 
 Boeken die al via USB op een toestel staan, worden niet automatisch gekoppeld.
 Verwijder die USB-kopie en laat het boek via kobosync binnenkomen. De leespositie van
@@ -123,6 +153,10 @@ Alles is in te stellen met omgevingsvariabelen:
 | `KOBOSYNC_PROXY_STORE` | `true` | Op `false` zetten om niets naar Kobo door te sturen. Dan werken winkel en Kobo-aankopen niet meer. |
 | `KOBOSYNC_PORT` | `8085` | Poort |
 | `KOBOSYNC_KEPUBIFY` | zoekt in PATH | Pad naar kepubify, of `none` om het uit te zetten |
+| `KOBOSYNC_SPLIT_AUTHORS` | `true` | Auteursvelden met meerdere namen opsplitsen |
+| `KOBOSYNC_FOLDER_COLLECTIONS` | `true` | Mappen als collecties op de Kobo's zetten |
+| `KOBOSYNC_FIX_STYLES` | `true` | Vaste lettergroottes en marges omzetten naar relatieve maten |
+| `KOBOSYNC_MOVE_FRONT_MATTER` | `true` | Rechtenpagina's en colofons naar het einde verplaatsen |
 | `KOBOSYNC_SCAN_INTERVAL` | `30` | Hoe vaak (seconden) de map hooguit opnieuw wordt gelezen |
 
 ## Beveiliging
