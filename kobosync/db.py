@@ -56,6 +56,17 @@ CREATE TABLE IF NOT EXISTS reading_states (
 );
 CREATE INDEX IF NOT EXISTS reading_states_modified ON reading_states (last_modified);
 
+CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL DEFAULT 'folder',
+    items TEXT NOT NULL DEFAULT '[]',
+    created REAL NOT NULL,
+    modified REAL NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS devices (
     device_id TEXT PRIMARY KEY,
     user_agent TEXT,
@@ -67,7 +78,7 @@ CREATE TABLE IF NOT EXISTS devices (
 
 BOOK_COLUMNS = (
     "uuid", "path", "format", "size", "mtime", "title", "authors", "language", "publisher",
-    "description", "pubdate", "isbn", "series", "series_index", "cover", "kepub_path",
+    "description", "pubdate", "isbn", "series", "series_index", "cover", "kepub_path", "processed_path", "proc_key",
     "created", "modified", "archived", "archived_reason", "archived_at",
 )
 
@@ -104,9 +115,19 @@ class Database:
         con.execute("PRAGMA foreign_keys=ON")
         return con
 
+    # Columns added after the first release; added to older databases on start.
+    MIGRATIONS = (
+        ("books", "processed_path", "TEXT"),
+        ("books", "proc_key", "TEXT"),
+    )
+
     def init_schema(self) -> None:
         with closing(self._connect()) as con:
             con.executescript(SCHEMA)
+            for table, column, kind in self.MIGRATIONS:
+                existing = {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
+                if column not in existing:
+                    con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
     # ------------------------------------------------------------------ books
 
@@ -225,6 +246,49 @@ class Database:
                "ORDER BY s.last_modified DESC, b.title COLLATE NOCASE")
         with closing(self._connect()) as con:
             return [_row_to_dict(r) for r in con.execute(sql)]
+
+    # ------------------------------------------------------------------- tags
+
+    @staticmethod
+    def _tag(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
+        if row is None:
+            return None
+        data = dict(row)
+        data["items"] = json.loads(data["items"] or "[]")
+        return data
+
+    def all_tags(self, source: Optional[str] = None) -> List[Dict[str, Any]]:
+        sql, params = "SELECT * FROM tags", []
+        if source:
+            sql += " WHERE source = ?"
+            params.append(source)
+        with closing(self._connect()) as con:
+            return [self._tag(r) for r in con.execute(sql + " ORDER BY name COLLATE NOCASE", params)]
+
+    def tag_by_uuid(self, uuid: str) -> Optional[Dict[str, Any]]:
+        with closing(self._connect()) as con:
+            return self._tag(con.execute("SELECT * FROM tags WHERE uuid = ?", (uuid,)).fetchone())
+
+    def insert_tag(self, uuid: str, name: str, items: List[str], source: str = "folder") -> None:
+        ts = now()
+        with closing(self._connect()) as con:
+            con.execute("INSERT INTO tags (uuid, name, source, items, created, modified) VALUES (?, ?, ?, ?, ?, ?)",
+                        (uuid, name, source, json.dumps(items), ts, ts))
+
+    def update_tag(self, tag_id: int, **fields) -> None:
+        fields = dict(fields)
+        if "items" in fields:
+            fields["items"] = json.dumps(fields["items"])
+        fields["modified"] = now()
+        cols = [c for c in ("name", "items", "deleted", "created", "modified") if c in fields]
+        sql = "UPDATE tags SET {} WHERE id = ?".format(", ".join(f"{c} = ?" for c in cols))
+        with closing(self._connect()) as con:
+            con.execute(sql, [fields[c] for c in cols] + [tag_id])
+
+    def changed_tags(self, since: float) -> List[Dict[str, Any]]:
+        with closing(self._connect()) as con:
+            return [self._tag(r) for r in con.execute(
+                "SELECT * FROM tags WHERE modified > ? ORDER BY modified, id", (since,))]
 
     # ---------------------------------------------------------------- devices
 

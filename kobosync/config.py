@@ -26,6 +26,10 @@ class Config:
     kepubify: str = ""
     scan_interval: int = 30
     store_timeout: float = 20.0
+    split_authors: bool = True
+    fix_styles: bool = True
+    move_front_matter: bool = True
+    folder_collections: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -40,6 +44,10 @@ class Config:
             kepubify=os.environ.get("KOBOSYNC_KEPUBIFY", "").strip(),
             scan_interval=int(os.environ.get("KOBOSYNC_SCAN_INTERVAL", "30")),
             store_timeout=float(os.environ.get("KOBOSYNC_STORE_TIMEOUT", "20")),
+            split_authors=_env_bool("KOBOSYNC_SPLIT_AUTHORS", True),
+            fix_styles=_env_bool("KOBOSYNC_FIX_STYLES", True),
+            move_front_matter=_env_bool("KOBOSYNC_MOVE_FRONT_MATTER", True),
+            folder_collections=_env_bool("KOBOSYNC_FOLDER_COLLECTIONS", True),
         )
 
     def prepare(self) -> "Config":
@@ -50,6 +58,7 @@ class Config:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.covers_dir.mkdir(exist_ok=True)
         self.kepub_dir.mkdir(exist_ok=True)
+        self.processed_dir.mkdir(exist_ok=True)
 
         if not self.auth_token:
             token_file = self.data_dir / "token.txt"
@@ -76,3 +85,7 @@ class Config:
     @property
     def kepub_dir(self) -> Path:
         return self.data_dir / "kepub"
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.data_dir / "processed"
