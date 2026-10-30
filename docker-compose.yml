@@ -15,3 +15,8 @@ services:
       # Zelf een token kiezen in plaats van het automatisch gegenereerde:
       # KOBOSYNC_TOKEN: kiesietsgeheims
       KOBOSYNC_PROXY_STORE: "true"
+      # Verbeteringen aan je boeken; zet in .env op "false" om uit te zetten.
+      KOBOSYNC_SPLIT_AUTHORS: ${KOBOSYNC_SPLIT_AUTHORS:-true}
+      KOBOSYNC_FOLDER_COLLECTIONS: ${KOBOSYNC_FOLDER_COLLECTIONS:-true}
+      KOBOSYNC_FIX_STYLES: ${KOBOSYNC_FIX_STYLES:-true}
+      KOBOSYNC_MOVE_FRONT_MATTER: ${KOBOSYNC_MOVE_FRONT_MATTER:-true}

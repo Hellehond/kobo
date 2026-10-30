@@ -97,6 +97,9 @@ moet je stap 3 opnieuw doen.
 
 ## Dagelijks gebruik
 
+Alle opdrachten op een rij staan in de [cheatsheet](CHEATSHEET.md).
+
+
 - **Boek toevoegen:** zet het bestand in de bibliotheekmap. Een submap wordt een collectie.
   Bij de volgende synchronisatie staat het op beide toestellen.
 - **Boek verwijderen:** haal het bestand uit de map. Het verdwijnt van beide toestellen.
