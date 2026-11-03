@@ -11,7 +11,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY kobosync ./kobosync
 
-ENV KOBOSYNC_LIBRARY=/library \
+# Write output straight to the logs instead of buffering it.
+ENV PYTHONUNBUFFERED=1 \
+    KOBOSYNC_LIBRARY=/library \
     KOBOSYNC_DATA=/data \
     KOBOSYNC_PORT=8085
 VOLUME ["/library", "/data"]
