@@ -30,6 +30,12 @@ class Config:
     fix_styles: bool = True
     move_front_matter: bool = True
     folder_collections: bool = True
+    hyphenate: bool = True
+    open_at_text: bool = True
+    upload_password: str = ""
+    upload_max_mb: int = 200
+    reading_goal: int = 0
+    timezone: str = "Europe/Amsterdam"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -48,6 +54,12 @@ class Config:
             fix_styles=_env_bool("KOBOSYNC_FIX_STYLES", True),
             move_front_matter=_env_bool("KOBOSYNC_MOVE_FRONT_MATTER", True),
             folder_collections=_env_bool("KOBOSYNC_FOLDER_COLLECTIONS", True),
+            hyphenate=_env_bool("KOBOSYNC_HYPHENATE", True),
+            open_at_text=_env_bool("KOBOSYNC_OPEN_AT_TEXT", True),
+            upload_password=os.environ.get("KOBOSYNC_UPLOAD_PASSWORD", ""),
+            upload_max_mb=int(os.environ.get("KOBOSYNC_UPLOAD_MAX_MB", "200")),
+            reading_goal=int(os.environ.get("KOBOSYNC_READING_GOAL", "0") or 0),
+            timezone=os.environ.get("KOBOSYNC_TIMEZONE", "").strip() or os.environ.get("TZ", "") or "Europe/Amsterdam",
         )
 
     def prepare(self) -> "Config":

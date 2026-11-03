@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from flask import (Blueprint, abort, current_app, g, jsonify, make_response, redirect,
-                   render_template_string, request, send_file)
+                   request, send_file)
 
-from . import store
+from . import stats, store
 from .resources import NATIVE_KOBO_RESOURCES
 from .synctoken import SyncToken
 from .util import now, parse_kobo_timestamp, to_kobo_timestamp
@@ -174,6 +174,13 @@ def reading_state_response(book: Dict[str, Any], state: Dict[str, Any]) -> Dict[
             "Value": state["location_value"],
             "Type": state["location_type"],
             "Source": state["location_source"],
+        }
+    elif book.get("start_value") and not state["times_started_reading"]:
+        # Never opened: start at the story rather than at the cover.
+        bookmark["Location"] = {
+            "Value": book["start_value"],
+            "Type": "KoboSpan",
+            "Source": book["start_source"],
         }
 
     return {
@@ -354,10 +361,19 @@ def library_state(book_uuid):
         fields["status_last_modified"] = ts
         result["StatusInfoResult"] = {"Result": "Success"}
 
+    previous = c.db.get_or_create_state(book["id"])
+    last = c.db.last_event(book["id"])
+    spent = fields.get("spent_reading_minutes") if statistics else None
+    added = stats.minutes_added(previous["spent_reading_minutes"], spent,
+                                ts - last["ts"] if last else None) if statistics else 0
     c.db.update_state(book["id"], **fields)
-    log.info("Reading state for '%s' from device %s: %s %s%%", book["title"],
+    c.db.add_reading_event(book["id"], request.headers.get("X-Kobo-DeviceId"), ts,
+                           fields.get("status") or previous["status"],
+                           fields.get("progress_percent", previous["progress_percent"]), spent, added)
+    log.info("Reading state for '%s' from device %s: %s %s%% at %s#%s (%s)", book["title"],
              request.headers.get("X-Kobo-DeviceId", "?"), fields.get("status", ""),
-             fields.get("progress_percent", ""))
+             fields.get("progress_percent", ""), fields.get("location_source"),
+             fields.get("location_value"), fields.get("location_type"))
     return jsonify({"RequestResult": "Success", "UpdateResults": [result]})
 
 
@@ -498,49 +514,6 @@ def loyalty_benefits():
     if c.cfg.proxy_store:
         return store.redirect_or_proxy(c.cfg)
     return jsonify({"Benefits": {}})
-
-
-# ------------------------------------------------------------------ status
-
-STATUS_TEMPLATE = """<!doctype html>
-<html lang="nl"><head><meta charset="utf-8"><title>kobosync</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body{font:15px/1.4 system-ui,sans-serif;margin:2rem auto;max-width:60rem;padding:0 1rem;color:#222}
-table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid #ddd;vertical-align:top}
-th{background:#f3f3f3}.muted{color:#777}.bar{background:#eee;height:.5rem;border-radius:.25rem;overflow:hidden;min-width:6rem}
-.bar i{display:block;height:100%;background:#2b7}code{background:#f3f3f3;padding:.1rem .3rem}
-</style></head><body>
-<h1>kobosync</h1>
-<p>Bibliotheek: <code>{{ library }}</code> &middot; {{ books|length }} boek(en) &middot; {{ devices|length }} toestel(len)</p>
-<h2>Toestellen</h2>
-{% if devices %}<table><tr><th>Toestel</th><th>Laatst gezien</th><th>Laatste sync</th></tr>
-{% for d in devices %}<tr><td><code>{{ d.device_id[:8] }}&hellip;</code><br><span class="muted">{{ d.user_agent or '' }}</span></td>
-<td>{{ fmt(d.last_seen) }}</td><td>{{ fmt(d.last_sync) if d.last_sync else '-' }}</td></tr>{% endfor %}</table>
-{% else %}<p class="muted">Nog geen toestel heeft contact gemaakt.</p>{% endif %}
-<h2>Boeken</h2>
-{% if books %}<table><tr><th>Titel</th><th>Formaat</th><th>Status</th><th>Voortgang</th><th>Laatst gelezen</th></tr>
-{% for b in books %}<tr>
-<td>{{ b.title }}<br><span class="muted">{{ b.authors|join(', ') }}{% if b.archived %} &middot; gearchiveerd ({{ b.archived_reason }}){% endif %}</span></td>
-<td>{{ 'KEPUB' if b.kepub_path else b.format }}</td>
-<td>{{ {'ReadyToRead':'Ongelezen','Reading':'Aan het lezen','Finished':'Uitgelezen'}.get(b.status, b.status) }}</td>
-<td>{% if b.progress_percent is not none %}<div class="bar"><i style="width:{{ b.progress_percent }}%"></i></div>{{ '%.0f'|format(b.progress_percent) }}%{% else %}<span class="muted">-</span>{% endif %}</td>
-<td>{{ fmt(b.state_modified) if b.progress_percent is not none else '-' }}</td></tr>{% endfor %}</table>
-{% else %}<p class="muted">Nog geen boeken. Zet EPUB- of KEPUB-bestanden in de bibliotheekmap.</p>{% endif %}
-</body></html>"""
-
-
-@bp.route("/status")
-def status_page():
-    c = ctx()
-    c.library.scan_if_due()
-    from datetime import datetime
-
-    def fmt(epoch):
-        return datetime.fromtimestamp(epoch).strftime("%d-%m-%Y %H:%M") if epoch else "-"
-
-    return render_template_string(STATUS_TEMPLATE, books=c.db.overview(), devices=c.db.devices(),
-                                  library=str(c.cfg.library_dir), fmt=fmt)
 
 
 # ------------------------------------------------------------- everything else

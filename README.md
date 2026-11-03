@@ -108,6 +108,12 @@ Alle opdrachten op een rij staan in de [cheatsheet](CHEATSHEET.md).
 - **Boek verwijderen:** haal het bestand uit de map. Het verdwijnt van beide toestellen.
   Verwijder je het op een toestel zelf, dan verdwijnt het ook van het andere.
   Terughalen kan met `python -m kobosync list` en `python -m kobosync restore <id>`.
+- **Uploaden vanaf je telefoon of computer:** open `http://<ip>:8085/kobo/<token>/upload`,
+  kies de bestanden en eventueel een collectie, en vul het uploadwachtwoord in. Zet daarvoor
+  eerst `KOBOSYNC_UPLOAD_PASSWORD` in `.env`. Zonder wachtwoord staat uploaden uit.
+- **Statistieken:** open `http://<ip>:8085/kobo/<token>/statistieken`. Je ziet per jaar hoeveel
+  boeken je hebt uitgelezen, je leestijd per maand en hoe je ervoor staat met je jaardoel.
+  De leestijd telt vanaf deze versie. Kobo-aankopen tellen niet mee.
 - **Overzicht:** open `http://<ip>:8085/kobo/<token>/status` in een browser. Je ziet
   per boek de status en hoe ver je bent, en wanneer elk toestel voor het laatst
   synchroniseerde.
@@ -132,6 +138,13 @@ met plaatjes, en boeken met DRM worden niet aangepast.
 - **Het boek opent bij het begin.** Rechtenpagina's, watermerkpagina's en colofons aan
   het begin van een boek gaan naar het einde. De cover, de titelpagina, de opdracht en
   het motto blijven op hun plek.
+
+- **Woordafbreking.** Lange woorden worden afgebroken in de lopende tekst, in de taal van
+  het boek. Dat geeft een rustiger tekstbeeld, vooral bij grote letters.
+- **Het boek opent bij het verhaal.** Een boek dat je nog niet hebt geopend, begint bij de
+  proloog of het eerste hoofdstuk. De cover en de titelpagina blijven vooraan, dus je kunt
+  er gewoon naar terugbladeren. Dit werkt alleen voor boeken die als KEPUB naar de Kobo gaan.
+  De Docker-versie zet alle boeken daarvoor om met kepubify.
 
 Elk onderdeel kun je uitzetten, zie de instellingen hieronder. Verander je een instelling,
 dan verwerkt kobosync alle boeken opnieuw.
@@ -163,6 +176,12 @@ Alles is in te stellen met omgevingsvariabelen:
 | `KOBOSYNC_FOLDER_COLLECTIONS` | `true` | Mappen als collecties op de Kobo's zetten |
 | `KOBOSYNC_FIX_STYLES` | `true` | Vaste lettergroottes en marges omzetten naar relatieve maten |
 | `KOBOSYNC_MOVE_FRONT_MATTER` | `true` | Rechtenpagina's en colofons naar het einde verplaatsen |
+| `KOBOSYNC_HYPHENATE` | `true` | Woordafbreking in de lopende tekst |
+| `KOBOSYNC_OPEN_AT_TEXT` | `true` | Ongeopende boeken laten beginnen bij het verhaal |
+| `KOBOSYNC_UPLOAD_PASSWORD` | leeg | Wachtwoord voor de uploadpagina. Leeg betekent dat uploaden uit staat. |
+| `KOBOSYNC_UPLOAD_MAX_MB` | `200` | Hoeveel megabyte je per keer mag uploaden |
+| `KOBOSYNC_READING_GOAL` | `0` | Jaardoel in aantal boeken. `0` betekent geen doel. |
+| `KOBOSYNC_TIMEZONE` | `Europe/Amsterdam` | Tijdzone voor datums op de pagina's |
 | `KOBOSYNC_SCAN_INTERVAL` | `30` | Hoe vaak (seconden) de map hooguit opnieuw wordt gelezen |
 
 ## Beveiliging

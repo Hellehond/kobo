@@ -150,12 +150,13 @@ def _looks_like_front_matter(item_id: str, href: str, markup: str, landmark_type
 @dataclass
 class FixReport:
     css_changes: int = 0
+    hyphenated: int = 0
     moved: List[str] = field(default_factory=list)
     skipped_reason: Optional[str] = None
 
     @property
     def changed(self) -> bool:
-        return bool(self.css_changes or self.moved)
+        return bool(self.css_changes or self.moved or self.hyphenated)
 
     def summary(self) -> str:
         if self.skipped_reason:
@@ -163,6 +164,8 @@ class FixReport:
         parts = []
         if self.css_changes:
             parts.append(f"{self.css_changes} opmaakregel(s) aangepast")
+        if self.hyphenated:
+            parts.append(f"woordafbreking in {self.hyphenated} bestand(en)")
         if self.moved:
             parts.append("naar achteren verplaatst: " + ", ".join(self.moved))
         return "; ".join(parts) or "geen wijzigingen nodig"
@@ -297,7 +300,8 @@ def _plan_front_matter(zf, opf_path, root) -> List[Tuple[str, str]]:
     return planned
 
 
-def process(src: Path, dest: Path, fix_styles: bool = True, move_front_matter: bool = True) -> FixReport:
+def process(src: Path, dest: Path, fix_styles: bool = True, move_front_matter: bool = True,
+            hyphenate: bool = False) -> FixReport:
     """Write an improved copy of ``src`` to ``dest`` if anything needs changing.
 
     ``dest`` only exists afterwards when the report says something changed.
@@ -305,7 +309,7 @@ def process(src: Path, dest: Path, fix_styles: bool = True, move_front_matter: b
     report = FixReport()
     if dest.exists():
         dest.unlink()
-    if not (fix_styles or move_front_matter):
+    if not (fix_styles or move_front_matter or hyphenate):
         return report
     try:
         with zipfile.ZipFile(src) as zf:
@@ -336,22 +340,27 @@ def process(src: Path, dest: Path, fix_styles: bool = True, move_front_matter: b
                         replacements[opf_path] = new_opf.encode("utf-8")
                         report.moved = [label for _, label in planned]
 
-            if fix_styles:
-                for info in zf.infolist():
-                    name = info.filename.lower()
-                    if name.endswith(CSS_EXTENSIONS):
-                        fixer = fix_css
-                    elif name.endswith(TEXT_EXTENSIONS) and not name.startswith("meta-inf/") and info.filename != opf_path:
-                        fixer = fix_markup
-                    else:
-                        continue
-                    text = _decode(zf.read(info))
-                    if text is None:
-                        continue
-                    new, count = fixer(text)
-                    if count:
-                        replacements[info.filename] = new.encode("utf-8")
-                        report.css_changes += count
+            language = _book_language(root)
+            for info in zf.infolist():
+                name = info.filename.lower()
+                is_css = name.endswith(CSS_EXTENSIONS)
+                is_doc = (name.endswith((".xhtml", ".html", ".htm")) and not name.startswith("meta-inf/"))
+                if not ((fix_styles and (is_css or is_doc or name.endswith(".xml"))) or (hyphenate and is_doc)):
+                    continue
+                if info.filename == opf_path or name.startswith("meta-inf/"):
+                    continue
+                text = _decode(zf.read(info))
+                if text is None:
+                    continue
+                new = text
+                if fix_styles:
+                    new, count = (fix_css if is_css else fix_markup)(new)
+                    report.css_changes += count
+                if hyphenate and is_doc:
+                    new, done = add_hyphenation(new, language)
+                    report.hyphenated += int(done)
+                if new != text:
+                    replacements[info.filename] = new.encode("utf-8")
 
             if not replacements:
                 return report
@@ -379,3 +388,130 @@ def _write_copy(zf: zipfile.ZipFile, dest: Path, replacements: Dict[str, bytes])
             new_info.compress_type = zipfile.ZIP_STORED if info.filename == "mimetype" else zipfile.ZIP_DEFLATED
             out.writestr(new_info, data)
     tmp.replace(dest)
+
+
+# ------------------------------------------------------------ hyphenation
+
+HYPHENATE_MARKER = "kobosync: woordafbreking"
+HYPHENATE_STYLE = (
+    f'<style type="text/css">/* {HYPHENATE_MARKER} */\n'
+    "p, li, dd, blockquote, td { -webkit-hyphens: auto; -epub-hyphens: auto; hyphens: auto; "
+    "adobe-hyphenate: auto; }\n"
+    "h1, h2, h3, h4, h5, h6 { -webkit-hyphens: manual; -epub-hyphens: manual; hyphens: manual; "
+    "adobe-hyphenate: none; }\n"
+    "</style>")
+_HEAD_END = re.compile(r"</head\s*>", re.IGNORECASE)
+_HTML_OPEN = re.compile(r"<html\b([^>]*)>", re.IGNORECASE)
+
+
+def add_hyphenation(markup: str, language: Optional[str]) -> Tuple[str, bool]:
+    """Ask the renderer to hyphenate body text.  Hyphenation needs a language,
+    so the book's language is set on <html> when the document has none."""
+    if HYPHENATE_MARKER in markup:
+        return markup, False
+    head = _HEAD_END.search(markup)
+    if not head:
+        return markup, False
+    markup = markup[:head.start()] + HYPHENATE_STYLE + markup[head.start():]
+    if language:
+        html = _HTML_OPEN.search(markup)
+        if html and not re.search(r"\blang\s*=", html.group(1)):
+            attrs = html.group(1) + f' xml:lang="{language}" lang="{language}"'
+            markup = markup[:html.start()] + f"<html{attrs}>" + markup[html.end():]
+    return markup, True
+
+
+def _book_language(root: ET.Element) -> Optional[str]:
+    for el in root.iter():
+        if _local(el.tag) == "language" and (el.text or "").strip():
+            lang = el.text.strip()
+            return lang if re.fullmatch(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*", lang) else None
+    return None
+
+
+# --------------------------------------------------------------- text start
+
+# Headings of pages that come before the story itself.
+_FRONT_TITLES = re.compile(
+    r"^\s*(cover|omslag|titel(pagina)?|title( page)?|inhoud(sopgave)?|contents|table of contents|innhold|"
+    r"opdracht|dedication|tilegnelse|motto|epigra(af|ph|f)|over (het boek|de auteurs?|deze uitgave)|"
+    r"about the (book|authors?)|om (boken|forfatter(ne|en)?)|colofon|colophon|kolofon|copyright|"
+    r"van dezelfde auteurs?|ook (van|verschenen)|i samme serie|av samme forfatter|also by)\b",
+    re.IGNORECASE)
+# Headings that mark the start of the story, even on a short page.
+_STORY_TITLES = re.compile(
+    r"^\s*(proloog|prologue|prolog|hoofdstuk|chapter|kapittel|kapitel|deel|part|del|een|één|one|en|"
+    r"1|i)\b[\s.:]*", re.IGNORECASE)
+_HEADING = re.compile(r"<h([1-4])\b[^>]*>(.*?)</h\1>", re.IGNORECASE | re.DOTALL)
+MIN_STORY_TEXT = 1200  # a page with this much text is not front matter
+
+
+def _first_heading(markup: str) -> str:
+    body = re.search(r"<body\b.*", markup, re.IGNORECASE | re.DOTALL)
+    m = _HEADING.search(body.group(0) if body else markup)
+    return re.sub(r"\s+", " ", _TAG.sub(" ", m.group(2))).strip() if m else ""
+
+
+def find_text_start(path: Path) -> Optional[str]:
+    """Archive path of the document where the story starts, or None when the
+    book already opens there (or the start cannot be told)."""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            opf_path = _find_opf(zf)
+            if not opf_path:
+                return None
+            root = ET.fromstring(zf.read(opf_path))
+            opf_dir = posixpath.dirname(opf_path)
+            manifest: Dict[str, Dict[str, str]] = {}
+            for el in root.iter():
+                if _local(el.tag) == "item" and el.get("id") and el.get("href"):
+                    manifest[el.get("id")] = {
+                        "path": posixpath.normpath(posixpath.join(opf_dir, unquote(el.get("href")))),
+                        "href": el.get("href"),
+                        "properties": el.get("properties") or "",
+                    }
+            spine = [manifest[el.get("idref")]["path"] for el in root.iter()
+                     if _local(el.tag) == "itemref" and el.get("idref") in manifest
+                     and (el.get("linear") or "yes").lower() != "no"]
+            if len(spine) < 2:
+                return None
+            _, landmark = _landmarks(zf, opf_dir, root, manifest)
+            if landmark in spine:
+                return landmark if landmark != spine[0] else None
+
+            window = spine[:max(8, min(15, len(spine) // 3))]
+            for doc in window:
+                try:
+                    markup = _decode(zf.read(doc)) or ""
+                except KeyError:
+                    continue
+                types = set()
+                for m in re.finditer(r"epub:type\s*=\s*[\"']([^\"']+)[\"']", markup):
+                    types.update(m.group(1).split())
+                heading = _first_heading(markup)
+                text = _visible_text(markup)
+                if types & {"bodymatter", "chapter", "prologue", "part"}:
+                    found = doc
+                elif _FRONT_TITLES.match(heading) or _FRONT_TITLES.match(text) or types & _FRONT_EPUB_TYPES:
+                    continue
+                elif _STORY_TITLES.match(heading) or len(text) >= MIN_STORY_TEXT:
+                    found = doc
+                else:
+                    continue
+                return found if found != spine[0] else None
+    except (zipfile.BadZipFile, ET.ParseError, OSError, KeyError):
+        return None
+    return None
+
+
+_KOBO_SPAN = re.compile(r"""id\s*=\s*["'](kobo\.\d+\.\d+)["']""")
+
+
+def first_kobo_span(path: Path, doc: str) -> Optional[str]:
+    """The first KoboSpan id in a KEPUB document, where a bookmark can point."""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            m = _KOBO_SPAN.search(zf.read(doc).decode("utf-8", "replace"))
+    except (zipfile.BadZipFile, OSError, KeyError):
+        return None
+    return m.group(1) if m else None

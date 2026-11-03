@@ -47,7 +47,7 @@ docker compose exec kobosync python -m kobosync scan         # boekenmap nu inle
 docker compose exec kobosync python -m kobosync restore 12   # boek 12 terugzetten
 ```
 
-- **Toevoegen:** zet het bestand in je boekenmap. Een submap wordt een collectie op de Kobo's.
+- **Toevoegen:** zet het bestand in je boekenmap, of gebruik de uploadpagina. Een submap wordt een collectie op de Kobo's.
 - **Verwijderen:** haal het bestand uit je boekenmap. Het verdwijnt van beide Kobo's.
 - **Terughalen na verwijderen op een Kobo:** zoek het nummer met `list` en gebruik `restore`.
   Staat er "missing" achter het boek, zet dan het bestand terug in de boekenmap.
@@ -68,7 +68,9 @@ De regel met `-> /library` is je boekenmap, de regel met `-> /data` je datamap.
 docker compose exec kobosync python -m kobosync token   # toont je token
 ```
 
-- **Statuspagina:** `https://<jouw adres>/kobo/<token>/status`, of `http://<ip>:8085/kobo/<token>/status` thuis.
+- **Overzicht:** `https://<jouw adres>/kobo/<token>/status`, of `http://<ip>:8085/kobo/<token>/status` thuis.
+- **Statistieken:** hetzelfde adres, maar eindigend op `/statistieken`.
+- **Uploaden:** hetzelfde adres, maar eindigend op `/upload`. Werkt alleen als `KOBOSYNC_UPLOAD_PASSWORD` in `.env` staat.
 - **Regel voor de Kobo's:** `api_endpoint=https://<jouw adres>/kobo/<token>`
 
 ## Bijwerken naar een nieuwe versie
@@ -145,6 +147,8 @@ Vervang `docker compose exec kobosync python` door `.venv/bin/python`, en geef d
 | Kobo synchroniseert niet | `docker compose logs -f kobosync` en dan synchroniseren op de Kobo. Zie je niets binnenkomen, dan klopt de regel `api_endpoint=` niet of is de server niet bereikbaar. |
 | Nieuw boek verschijnt niet | `python -m kobosync scan` uitvoeren en het bestand controleren: alleen `.epub` en `.kepub.epub` worden gelezen. |
 | Boek staat er dubbel | Het boek stond er al via USB. Verwijder de USB-kopie op de Kobo. |
+| Boek opent toch op de cover | Kijk in de logs naar "opens at". Staat het boek er niet bij, dan gaat het niet als KEPUB naar de Kobo of vond kobosync geen begin. Een boek dat al geopend is, behoudt zijn eigen plek. |
+| Upload mislukt bij een groot bestand | Verhoog `KOBOSYNC_UPLOAD_MAX_MB`. Via een Cloudflare Tunnel kan hooguit 100 MB per keer. |
 | Collectie is leeg op de Kobo | Kijk in de logs naar regels met "Collection". Daar staat hoeveel boeken kobosync in elke collectie heeft gestuurd. |
 | `git pull` vraagt om een wachtwoord | De repository is privé. Stel een deploy key in, zie hieronder. |
 | Cloudflare-fout 502 | `docker compose logs cloudflared`, en controleer dat de Public Hostname naar `kobosync:8085` wijst. |

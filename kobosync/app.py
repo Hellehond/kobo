@@ -6,6 +6,7 @@ from flask import Flask
 
 from .config import Config
 from .db import Database
+from . import web
 from .kobo import TAG_FORMAT, Context, bp
 from .library import Library
 
@@ -23,7 +24,14 @@ def create_app(cfg: Config) -> Flask:
         db.set_meta("tag_format", TAG_FORMAT)
     library = Library(cfg, db)
     app.extensions["kobosync"] = Context(cfg, db, library)
+    app.config["MAX_CONTENT_LENGTH"] = max(cfg.upload_max_mb, 1) * 1024 * 1024
+    web.install(app)
     app.register_blueprint(bp)
+
+    @app.errorhandler(413)
+    def too_large(_error):
+        return (f"Te groot: hooguit {cfg.upload_max_mb} MB per keer. "
+                "Verhoog KOBOSYNC_UPLOAD_MAX_MB of upload in delen.\n"), 413, {"Content-Type": "text/plain; charset=utf-8"}
 
     @app.route("/")
     def index():

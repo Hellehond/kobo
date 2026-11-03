@@ -67,6 +67,19 @@ CREATE TABLE IF NOT EXISTS tags (
     deleted INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS reading_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    device_id TEXT,
+    ts REAL NOT NULL,
+    status TEXT,
+    progress REAL,
+    spent_minutes INTEGER,
+    minutes_added INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS reading_events_ts ON reading_events (ts);
+CREATE INDEX IF NOT EXISTS reading_events_book ON reading_events (book_id, ts);
+
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT
@@ -83,7 +96,7 @@ CREATE TABLE IF NOT EXISTS devices (
 
 BOOK_COLUMNS = (
     "uuid", "path", "format", "size", "mtime", "title", "authors", "language", "publisher",
-    "description", "pubdate", "isbn", "series", "series_index", "cover", "kepub_path", "processed_path", "proc_key", "content_hash",
+    "description", "pubdate", "isbn", "series", "series_index", "cover", "kepub_path", "processed_path", "proc_key", "content_hash", "start_source", "start_value",
     "created", "modified", "archived", "archived_reason", "archived_at",
 )
 
@@ -125,6 +138,8 @@ class Database:
         ("books", "processed_path", "TEXT"),
         ("books", "proc_key", "TEXT"),
         ("books", "content_hash", "TEXT"),
+        ("books", "start_source", "TEXT"),
+        ("books", "start_value", "TEXT"),
     )
 
     def init_schema(self) -> None:
@@ -248,7 +263,7 @@ class Database:
 
     def overview(self) -> List[Dict[str, Any]]:
         sql = ("SELECT b.*, s.status, s.progress_percent, s.last_modified AS state_modified, "
-               "s.spent_reading_minutes FROM books b LEFT JOIN reading_states s ON s.book_id = b.id "
+               "s.status_last_modified AS status_modified, s.spent_reading_minutes FROM books b LEFT JOIN reading_states s ON s.book_id = b.id "
                "ORDER BY s.last_modified DESC, b.title COLLATE NOCASE")
         with closing(self._connect()) as con:
             return [_row_to_dict(r) for r in con.execute(sql)]
@@ -299,6 +314,26 @@ class Database:
     def bump_tags(self, source: str = "folder") -> int:
         with closing(self._connect()) as con:
             return con.execute("UPDATE tags SET modified = ? WHERE source = ?", (now(), source)).rowcount
+
+    # --------------------------------------------------------- reading events
+
+    def add_reading_event(self, book_id: int, device_id: Optional[str], ts: float, status: Optional[str],
+                          progress: Optional[float], spent_minutes: Optional[int], minutes_added: int) -> None:
+        with closing(self._connect()) as con:
+            con.execute(
+                "INSERT INTO reading_events (book_id, device_id, ts, status, progress, spent_minutes, minutes_added) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (book_id, device_id, ts, status, progress, spent_minutes, minutes_added))
+
+    def last_event(self, book_id: int) -> Optional[Dict[str, Any]]:
+        with closing(self._connect()) as con:
+            row = con.execute("SELECT * FROM reading_events WHERE book_id = ? ORDER BY ts DESC, id DESC LIMIT 1",
+                              (book_id,)).fetchone()
+            return dict(row) if row else None
+
+    def reading_events(self) -> List[Dict[str, Any]]:
+        with closing(self._connect()) as con:
+            return [dict(r) for r in con.execute("SELECT * FROM reading_events ORDER BY ts, id")]
 
     # ------------------------------------------------------------------- meta
 
