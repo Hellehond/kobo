@@ -26,16 +26,23 @@ def cmd_serve(args) -> int:
     if args.no_proxy:
         cfg.proxy_store = False
     app = create_app(cfg)
-    library = app.extensions["kobosync"].library
-    library.scan()
-    print("kobosync gestart")
-    print(f"  bibliotheek : {cfg.library_dir}")
-    print(f"  data        : {cfg.data_dir}")
-    print(f"  kepubify    : {cfg.kepubify or 'niet gevonden (EPUB wordt ongewijzigd aangeboden)'}")
-    print(f"  Kobo store  : {'wordt doorgestuurd' if cfg.proxy_store else 'UIT (alleen eigen boeken)'}")
     shown = cfg.public_url or f"http://<ip-van-deze-machine>:{cfg.port}"
-    print(f"  api_endpoint voor de e-readers: {shown}/kobo/{cfg.auth_token}")
-    print(f"  statuspagina: {shown}/kobo/{cfg.auth_token}/status")
+    base = f"{shown}/kobo/{cfg.auth_token}"
+    lines = [
+        "kobosync gestart",
+        f"  bibliotheek : {cfg.library_dir}",
+        f"  data        : {cfg.data_dir}",
+        f"  kepubify    : {cfg.kepubify or 'niet gevonden (EPUB wordt ongewijzigd aangeboden)'}",
+        f"  Kobo store  : {'wordt doorgestuurd' if cfg.proxy_store else 'UIT (alleen eigen boeken)'}",
+        f"  uploaden    : {'aan' if cfg.upload_password else 'uit (zet KOBOSYNC_UPLOAD_PASSWORD)'}",
+        f"  api_endpoint voor de e-readers: {base}",
+        f"  overzicht   : {base}/status",
+        f"  statistieken: {base}/statistieken",
+        f"  uploadpagina: {base}/upload",
+    ]
+    # flush: under Docker stdout is not a terminal and would be buffered.
+    print("\n".join(lines), flush=True)
+    app.extensions["kobosync"].library.scan()
     try:
         from waitress import serve
     except ImportError:
