@@ -309,8 +309,11 @@ def build_entry(article: dict, renderer: Renderer) -> Optional[Entry]:
     entry = Entry(headword=headword, other_lemmas=names[1:], word_class=word_class(lemmas), forms_shown=[])
 
     for name in names:
-        for part in name.split("/"):
-            entry.variants.add(normalise_variant(part))
+        # "veidekke/vegdekke" holds two spellings; "i/til en viss grad" is one
+        # expression, whose parts must not become words of their own.
+        if not any(c.isspace() for c in name):
+            for part in name.split("/"):
+                entry.variants.add(normalise_variant(part))
     for lemma in lemmas:
         for paradigm in lemma.get("paradigm_info", []):
             for form in paradigm.get("inflection", []):
@@ -330,7 +333,7 @@ def build_entry(article: dict, renderer: Renderer) -> Optional[Entry]:
 def write_kobo_dictionary(entries: Iterable[Entry], out: Path) -> Dict[str, int]:
     import marisa_trie
 
-    files: Dict[str, List[Tuple[int, str, str]]] = defaultdict(list)
+    files: Dict[str, List[Tuple[tuple, str]]] = defaultdict(list)
     words: Set[str] = set()
     count = 0
     for entry in entries:
@@ -342,8 +345,12 @@ def write_kobo_dictionary(entries: Iterable[Entry], out: Path) -> Dict[str, int]
         by_prefix: Dict[str, str] = {}
         for word in [entry.headword, *sorted(entry.variants, key=lambda w: (len(w), w))]:
             by_prefix.setdefault(kobo_prefix(word), word)
+        head = entry.headword.lower()
         for prefix, word in by_prefix.items():
-            files[prefix].append((len(word), word, markup))
+            # Kobo shows every match in file order: shortest words first (its
+            # fallback takes the first prefix match), and for each word the
+            # entries that have it as headword before those where it is a form.
+            files[prefix].append(((len(word), word.lower(), head != word.lower(), len(head), head), markup))
 
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
@@ -354,8 +361,8 @@ def write_kobo_dictionary(entries: Iterable[Entry], out: Path) -> Dict[str, int]
             zf.write(trie_path, "words", compress_type=zipfile.ZIP_DEFLATED)
             for prefix in sorted(files):
                 # Shortest first: Kobo falls back to the first prefix match.
-                rows = sorted(files[prefix], key=lambda r: (r[0], r[1]))
-                doc = '<?xml version="1.0" encoding="utf-8"?><html>' + "\n".join(r[2] for r in rows) + "</html>"
+                rows = sorted(files[prefix], key=lambda r: r[0])
+                doc = '<?xml version="1.0" encoding="utf-8"?><html>' + "\n".join(r[1] for r in rows) + "</html>"
                 zf.writestr(f"{prefix}.html", gzip.compress(doc.encode("utf-8"), 9),
                             compress_type=zipfile.ZIP_STORED)
     tmp.replace(out)

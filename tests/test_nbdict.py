@@ -141,3 +141,25 @@ def test_entries_are_sorted_shortest_first(tmp_path):
     with zipfile.ZipFile(out) as zf:
         doc = gzip.decompress(zf.read("bi.html")).decode()
     assert re.findall(r'<a name="([^"]+)" />', doc) == ["bi", "bil", "bilene"]
+
+
+def test_expressions_do_not_claim_their_words():
+    art = {"article_id": 9, "lemmas": [{"lemma": "i/til en viss grad", "paradigm_info": []}],
+           "body": {"definitions": []}}
+    assert nb.build_entry(art, nb.Renderer({})).variants == set()
+    two = {"article_id": 10, "lemmas": [{"lemma": "veidekke/vegdekke", "paradigm_info": []}],
+           "body": {"definitions": []}}
+    assert {"veidekke", "vegdekke"} <= nb.build_entry(two, nb.Renderer({})).variants
+
+
+def test_exact_headwords_come_before_forms(tmp_path):
+    pytest.importorskip("marisa_trie")
+    renderer = nb.Renderer({})
+    fare = {"article_id": 1, "lemmas": [{"lemma": "fare", "paradigm_info": [
+        paradigm(["VERB"], [("fare", ["Inf"]), ("for", ["Past"])])]}], "body": {"definitions": []}}
+    prep = {"article_id": 2, "lemmas": [{"lemma": "for", "paradigm_info": []}], "body": {"definitions": []}}
+    out = tmp_path / "d.zip"
+    nb.write_kobo_dictionary([nb.build_entry(a, renderer) for a in (fare, prep)], out)
+    with zipfile.ZipFile(out) as zf:
+        doc = gzip.decompress(zf.read("fo.html")).decode()
+    assert re.findall(r'<a name="([^"]+)" />', doc) == ["for", "fare"]
