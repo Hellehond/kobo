@@ -7,3 +7,4 @@ data/
 library/
 *.egg-info/
 .env
+build/
