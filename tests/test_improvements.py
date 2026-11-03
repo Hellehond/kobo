@@ -324,7 +324,7 @@ def test_changed_settings_reprocess_books(tmp_path):
         app.extensions["kobosync"].library.scan()
         return app
 
-    app = app_with(split_authors=False, move_front_matter=False, fix_styles=False)
+    app = app_with(split_authors=False, move_front_matter=False, fix_styles=False, hyphenate=False)
     book = app.extensions["kobosync"].db.all_books()[0]
     assert book["authors"] == ["Een Auteur en Twee Auteur"] and book["processed_path"] is None
 

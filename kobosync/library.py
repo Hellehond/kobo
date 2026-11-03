@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 # Bump when the way books are processed changes, so existing books are
 # processed again on the next scan.
-PROCESSING_VERSION = 2
+PROCESSING_VERSION = 3
 COLLECTION_SEPARATOR = " / "
 
 
@@ -59,6 +59,8 @@ class Library:
             f"split={int(c.split_authors)}",
             f"css={int(c.fix_styles)}",
             f"front={int(c.move_front_matter)}",
+            f"hyph={int(c.hyphenate)}",
+            f"start={int(c.open_at_text)}",
             f"kepub={int(bool(c.kepubify))}",
         ]
         return ";".join(flags)
@@ -160,7 +162,8 @@ class Library:
         # whichever version is served.
         processed = self.cfg.processed_dir / f"{book_uuid}.epub"
         report = epubfix.process(path, processed, fix_styles=self.cfg.fix_styles,
-                                 move_front_matter=self.cfg.move_front_matter)
+                                 move_front_matter=self.cfg.move_front_matter,
+                                 hyphenate=self.cfg.hyphenate)
         source = processed if report.changed else path
         log.info("%s: %s", rel, report.summary())
 
@@ -175,13 +178,41 @@ class Library:
         )
         if fmt == "EPUB" and self.cfg.kepubify:
             fields["kepub_path"] = self._convert_kepub(source, book_uuid)
+        fields["start_source"], fields["start_value"] = self._text_start(fields, source, fmt)
         if existing:
             self.db.update_book(existing["id"], **fields)
+            book_id = existing["id"]
             log.info("Updated %s (%s)", meta.title, rel)
-            return existing["id"]
-        book_id = self.db.insert_book(uuid=book_uuid, **fields)
-        log.info("Added %s by %s (%s)", meta.title, ", ".join(fields["authors"]), rel)
+        else:
+            book_id = self.db.insert_book(uuid=book_uuid, **fields)
+            log.info("Added %s by %s (%s)", meta.title, ", ".join(fields["authors"]), rel)
+        if fields["start_source"]:
+            log.info("%s opens at %s#%s", rel, fields["start_source"], fields["start_value"])
+        changed_start = not existing or (existing.get("start_source"), existing.get("start_value")) != (
+            fields["start_source"], fields["start_value"])
+        if changed_start:
+            state = self.db.get_or_create_state(book_id)
+            if not state["location_value"]:
+                # Unopened book: let the devices pick up the new starting point.
+                ts = time.time()
+                self.db.update_state(book_id, last_modified=ts, priority_timestamp=ts,
+                                     bookmark_last_modified=ts)
         return book_id
+
+    def _text_start(self, fields: Dict[str, Any], source: Path, fmt: str) -> Tuple[Optional[str], Optional[str]]:
+        """Where an unopened book should open: the first KoboSpan of the page
+        where the story starts.  Only KEPUBs have KoboSpans to point at."""
+        if not self.cfg.open_at_text:
+            return None, None
+        if fields.get("kepub_path"):
+            served = self.cfg.kepub_dir / fields["kepub_path"]
+        elif fmt == "KEPUB":
+            served = source
+        else:
+            return None, None
+        doc = epubfix.find_text_start(served)
+        span = epubfix.first_kobo_span(served, doc) if doc else None
+        return (doc, span) if span else (None, None)
 
     def _convert_kepub(self, path: Path, book_uuid: str) -> Optional[str]:
         out = self.cfg.kepub_dir / f"{book_uuid}.kepub.epub"
