@@ -130,6 +130,16 @@ docker compose start kobosync
 Haal een boek op de Kobo niet uit je bibliotheek als je alleen de download wilt
 vernieuwen. Dan verdwijnt het van beide toestellen.
 
+## Noors woordenboek
+
+```sh
+pip install -r tools/requirements-dictionary.txt
+python tools/build_nb_dictionary.py              # downloaden of bijwerken, en bouwen
+python tools/build_nb_dictionary.py --no-update  # alleen opnieuw bouwen
+```
+
+Kopieer `build/dicthtml-nb.zip` via USB naar `.kobo/custom-dict` op elke Kobo.
+
 ## Zonder Docker
 
 Vervang `docker compose exec kobosync python` door `.venv/bin/python`, en geef dezelfde

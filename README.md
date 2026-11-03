@@ -159,6 +159,47 @@ Boeken die al via USB op een toestel staan, worden niet automatisch gekoppeld.
 Verwijder die USB-kopie en laat het boek via kobosync binnenkomen. De leespositie van
 de USB-kopie neemt Kobo niet mee.
 
+## Noors woordenboek (Bokmål)
+
+In de map `tools` staat een script dat een Noors woordenboek voor de Kobo bouwt uit
+[Bokmålsordboka](https://ordbokene.no), het standaardwoordenboek van de Universiteit van
+Bergen en Språkrådet. Kobo heeft zelf geen Noors woordenboek.
+
+- **Ook vervoegde woorden.** Tik je op "skjøv" of "gikk", dan vindt de Kobo "skyve" en "gå".
+- **Per woord:** woordsoort, uitspraak, de belangrijkste vervoegingen, de betekenissen met
+  voorbeelden, vaste uitdrukkingen en de herkomst.
+
+### Installeren op de Kobo
+
+Dit werkt op firmware 4.24 of nieuwer. Doe het op elke Kobo:
+
+1. Sluit de Kobo met USB aan op je computer.
+2. Open de verborgen map `.kobo` op de Kobo en maak daarin een map `custom-dict` als die er
+   nog niet is.
+3. Kopieer `dicthtml-nb.zip` naar `.kobo/custom-dict`. Hernoem het bestand niet.
+4. Werp de Kobo netjes uit.
+5. Houd in een Noors boek een woord ingedrukt. Kies bovenaan in het woordenboekvenster het
+   Noorse woordenboek.
+
+### Zelf bouwen of bijwerken
+
+Bokmålsordboka wordt regelmatig aangevuld. Zo bouw je een nieuwe versie:
+
+```sh
+pip install -r tools/requirements-dictionary.txt
+python tools/build_nb_dictionary.py
+```
+
+Het woordenboek komt in `build/dicthtml-nb.zip`. De eerste keer haalt het script alle
+artikelen op via de openbare API van ordbøkene.no, en dat duurt even. Daarna haalt het alleen
+nog gewijzigde artikelen op.
+
+### Licentie
+
+De inhoud valt onder [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/):
+"Bokmålsordboka, Universitetet i Bergen og Språkrådet, ordbøkene.no". Elk woord in het
+woordenboek vermeldt die bron. Geef je het bestand door, laat die vermelding dan staan.
+
 ## Instellingen
 
 Alles is in te stellen met omgevingsvariabelen:
