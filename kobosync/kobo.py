@@ -278,7 +278,10 @@ def library_sync():
     else:
         # Collections only once all their books have been delivered.
         results.extend(collection_results(token, new_token))
-    if not more and c.cfg.proxy_store:
+    # The Android app identifies itself: it reads only our own books, and has
+    # no Kobo account to ask the store with.
+    from_app = bool(request.headers.get("X-Kobosync-Client"))
+    if not more and c.cfg.proxy_store and not from_app:
         # Our own page is complete, so merge in whatever the real store has.
         try:
             upstream = store.forward(c.cfg.auth_token, c.cfg.store_timeout, sync_token=token)

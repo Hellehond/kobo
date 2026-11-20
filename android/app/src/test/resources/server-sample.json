@@ -1,0 +1,272 @@
+{
+ "first": [
+  {
+   "NewEntitlement": {
+    "BookEntitlement": {
+     "Accessibility": "Full",
+     "ActivePeriod": {
+      "From": "2026-11-20T20:49:44Z"
+     },
+     "Created": "2026-11-20T20:49:44Z",
+     "CrossRevisionId": "96428b9f-029b-4163-b366-043f990da455",
+     "Id": "96428b9f-029b-4163-b366-043f990da455",
+     "IsRemoved": false,
+     "IsHiddenFromArchive": false,
+     "IsLocked": false,
+     "LastModified": "2026-11-20T20:49:44Z",
+     "OriginCategory": "Imported",
+     "RevisionId": "96428b9f-029b-4163-b366-043f990da455",
+     "Status": "Active"
+    },
+    "BookMetadata": {
+     "Categories": [
+      "00000000-0000-0000-0000-000000000001"
+     ],
+     "CoverImageId": "96428b9f-029b-4163-b366-043f990da455",
+     "CrossRevisionId": "96428b9f-029b-4163-b366-043f990da455",
+     "CurrentDisplayPrice": {
+      "CurrencyCode": "EUR",
+      "TotalAmount": 0
+     },
+     "CurrentLoveDisplayPrice": {
+      "TotalAmount": 0
+     },
+     "Description": "",
+     "DownloadUrls": [
+      {
+       "Format": "KEPUB",
+       "Size": 2034819,
+       "Url": "https://kobo.example.org/kobo/tok/download/1/KEPUB",
+       "Platform": "Generic",
+       "DrmType": "None"
+      }
+     ],
+     "EntitlementId": "96428b9f-029b-4163-b366-043f990da455",
+     "ExternalIds": [],
+     "Genre": "00000000-0000-0000-0000-000000000001",
+     "IsEligibleForKoboLove": false,
+     "IsInternetArchive": false,
+     "IsPreOrder": false,
+     "IsSocialEnabled": true,
+     "Language": "nb",
+     "PhoneticPronunciations": {},
+     "PublicationDate": "2022-06-10T00:00:00Z",
+     "Publisher": {
+      "Imprint": "",
+      "Name": "Bonnier Norsk Forlag"
+     },
+     "RevisionId": "96428b9f-029b-4163-b366-043f990da455",
+     "Title": "Arr",
+     "WorkId": "96428b9f-029b-4163-b366-043f990da455",
+     "ContributorRoles": [
+      {
+       "Name": "Jørn Lier Horst"
+      },
+      {
+       "Name": "Thomas Enger"
+      }
+     ],
+     "Contributors": [
+      "Jørn Lier Horst",
+      "Thomas Enger"
+     ],
+     "Isbn": "9788234705892"
+    },
+    "ReadingState": {
+     "EntitlementId": "96428b9f-029b-4163-b366-043f990da455",
+     "Created": "2026-11-20T20:49:44Z",
+     "LastModified": "2026-11-20T20:49:44Z",
+     "PriorityTimestamp": "2026-11-20T20:49:44Z",
+     "StatusInfo": {
+      "LastModified": "2026-11-20T20:49:44Z",
+      "Status": "ReadyToRead",
+      "TimesStartedReading": 0
+     },
+     "Statistics": {
+      "LastModified": "2026-11-20T20:49:44Z"
+     },
+     "CurrentBookmark": {
+      "LastModified": "2026-11-20T20:49:44Z",
+      "Location": {
+       "Value": "kobo.1.1",
+       "Type": "KoboSpan",
+       "Source": "OEBPS/E19957-Bonnier-ARR-1.xhtml"
+      }
+     }
+    }
+   }
+  },
+  {
+   "NewEntitlement": {
+    "BookEntitlement": {
+     "Accessibility": "Full",
+     "ActivePeriod": {
+      "From": "2026-11-20T20:49:44Z"
+     },
+     "Created": "2026-11-20T20:49:44Z",
+     "CrossRevisionId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "Id": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "IsRemoved": false,
+     "IsHiddenFromArchive": false,
+     "IsLocked": false,
+     "LastModified": "2026-11-20T20:49:44Z",
+     "OriginCategory": "Imported",
+     "RevisionId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "Status": "Active"
+    },
+    "BookMetadata": {
+     "Categories": [
+      "00000000-0000-0000-0000-000000000001"
+     ],
+     "CoverImageId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "CrossRevisionId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "CurrentDisplayPrice": {
+      "CurrencyCode": "EUR",
+      "TotalAmount": 0
+     },
+     "CurrentLoveDisplayPrice": {
+      "TotalAmount": 0
+     },
+     "Description": "",
+     "DownloadUrls": [
+      {
+       "Format": "KEPUB",
+       "Size": 403007,
+       "Url": "https://kobo.example.org/kobo/tok/download/2/KEPUB",
+       "Platform": "Generic",
+       "DrmType": "None"
+      }
+     ],
+     "EntitlementId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "ExternalIds": [],
+     "Genre": "00000000-0000-0000-0000-000000000001",
+     "IsEligibleForKoboLove": false,
+     "IsInternetArchive": false,
+     "IsPreOrder": false,
+     "IsSocialEnabled": true,
+     "Language": "nl",
+     "PhoneticPronunciations": {},
+     "PublicationDate": "2026-09-29T00:00:00Z",
+     "Publisher": {
+      "Imprint": "",
+      "Name": "Das Mag Uitgevers"
+     },
+     "RevisionId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "Title": "Tetris",
+     "WorkId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "ContributorRoles": [
+      {
+       "Name": "Thomas Heerma van Voss"
+      },
+      {
+       "Name": "Maartje Wortel"
+      }
+     ],
+     "Contributors": [
+      "Thomas Heerma van Voss",
+      "Maartje Wortel"
+     ],
+     "Isbn": "9789493589025"
+    },
+    "ReadingState": {
+     "EntitlementId": "d3274e6d-9a61-4f01-a657-736b6a41f11a",
+     "Created": "2026-11-20T20:49:44Z",
+     "LastModified": "2026-11-20T20:49:44Z",
+     "PriorityTimestamp": "2026-11-20T20:49:44Z",
+     "StatusInfo": {
+      "LastModified": "2026-11-20T20:49:44Z",
+      "Status": "ReadyToRead",
+      "TimesStartedReading": 0
+     },
+     "Statistics": {
+      "LastModified": "2026-11-20T20:49:44Z"
+     },
+     "CurrentBookmark": {
+      "LastModified": "2026-11-20T20:49:44Z",
+      "Location": {
+       "Value": "kobo.1.1",
+       "Type": "KoboSpan",
+       "Source": "OEBPS/9789493589025-7.xhtml"
+      }
+     }
+    }
+   }
+  },
+  {
+   "NewTag": {
+    "Tag": {
+     "Created": "2026-11-20T20:49:44Z",
+     "Id": "fd212f08-6998-4811-a234-6aa415a88fa4",
+     "Items": [
+      {
+       "RevisionId": "96428b9f-029b-4163-b366-043f990da455",
+       "Type": "ProductRevisionTagItem"
+      }
+     ],
+     "LastModified": "2026-11-20T20:49:44Z",
+     "Name": "Thrillers",
+     "Type": "UserTag"
+    }
+   }
+  }
+ ],
+ "second": [
+  {
+   "ChangedReadingState": {
+    "ReadingState": {
+     "EntitlementId": "96428b9f-029b-4163-b366-043f990da455",
+     "Created": "2026-11-20T20:49:44Z",
+     "LastModified": "2026-11-20T20:49:44Z",
+     "PriorityTimestamp": "2026-11-20T20:49:44Z",
+     "StatusInfo": {
+      "LastModified": "2026-11-20T20:49:44Z",
+      "Status": "Reading",
+      "TimesStartedReading": 1
+     },
+     "Statistics": {
+      "LastModified": "2026-11-20T20:49:44Z",
+      "SpentReadingMinutes": 12
+     },
+     "CurrentBookmark": {
+      "LastModified": "2026-11-20T20:49:44Z",
+      "ProgressPercent": 9.0,
+      "ContentSourceProgressPercent": 40.0,
+      "Location": {
+       "Value": "kobo.7.1",
+       "Type": "KoboSpan",
+       "Source": "OEBPS/E19957-Bonnier-ARR-2.xhtml"
+      }
+     }
+    }
+   }
+  }
+ ],
+ "state": [
+  {
+   "EntitlementId": "96428b9f-029b-4163-b366-043f990da455",
+   "Created": "2026-11-20T20:49:44Z",
+   "LastModified": "2026-11-20T20:49:44Z",
+   "PriorityTimestamp": "2026-11-20T20:49:44Z",
+   "StatusInfo": {
+    "LastModified": "2026-11-20T20:49:44Z",
+    "Status": "Reading",
+    "TimesStartedReading": 1
+   },
+   "Statistics": {
+    "LastModified": "2026-11-20T20:49:44Z",
+    "SpentReadingMinutes": 12
+   },
+   "CurrentBookmark": {
+    "LastModified": "2026-11-20T20:49:44Z",
+    "ProgressPercent": 9.0,
+    "ContentSourceProgressPercent": 40.0,
+    "Location": {
+     "Value": "kobo.7.1",
+     "Type": "KoboSpan",
+     "Source": "OEBPS/E19957-Bonnier-ARR-2.xhtml"
+    }
+   }
+  }
+ ],
+ "arrId": "96428b9f-029b-4163-b366-043f990da455"
+}

@@ -159,6 +159,12 @@ Boeken die al via USB op een toestel staan, worden niet automatisch gekoppeld.
 Verwijder die USB-kopie en laat het boek via kobosync binnenkomen. De leespositie van
 de USB-kopie neemt Kobo niet mee.
 
+## Lezen op je Android-telefoon
+
+In de map [android](android/README.md) staat een leesapp voor je telefoon. Die praat met kobosync
+zoals een Kobo, dus je leest je eigen boeken en gaat verder op de zin waar je op je Kobo was. Het
+installatiebestand staat op de [Releases-pagina](https://github.com/Hellehond/kobo/releases).
+
 ## Noors woordenboek (Bokmål)
 
 In de map `tools` staat een script dat een Noors woordenboek voor de Kobo bouwt uit
