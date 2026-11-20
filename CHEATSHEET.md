@@ -132,7 +132,8 @@ vernieuwen. Dan verdwijnt het van beide toestellen.
 
 ## Android-app
 
-- **Installeren of bijwerken:** download het nieuwste APK-bestand van de Releases-pagina op GitHub en open het op je telefoon.
+- **Installeren via Google Play:** een interne test in je Play Console, met het AAB-bestand van de Releases-pagina. De stappen staan in `android/README.md`.
+- **Installeren als APK:** download het nieuwste APK-bestand van de Releases-pagina op GitHub en open het op je telefoon.
 - **Verbinden:** vul in de app hetzelfde adres in als de regel `api_endpoint` op je Kobo's.
 - **Synchroniseren:** gebeurt bij het openen van de app en van een boek. Trek de boekenlijst omlaag om het direct te doen.
 
