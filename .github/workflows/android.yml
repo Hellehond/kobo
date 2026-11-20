@@ -1,7 +1,8 @@
 name: Android app
 
 # Builds and tests the app for changes under android/. A push to main also
-# publishes the APK as a release, so merging is all it takes to get an update.
+# publishes a release with the APK and the app bundle, and, when the Play
+# secret is set, sends the bundle to the internal testing track on Google Play.
 on:
   push:
     branches: [main]
@@ -28,6 +29,7 @@ jobs:
         working-directory: android
     env:
       HAS_KEY: ${{ secrets.KOBOSYNC_KEYSTORE_BASE64 != '' }}
+      HAS_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,17 +60,21 @@ jobs:
           KOBOSYNC_KEY_PASSWORD: ${{ secrets.KOBOSYNC_KEYSTORE_PASSWORD }}
           KOBOSYNC_KEY_ALIAS: kobosync
         run: >
-          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleRelease :app:bundleRelease
           -PappVersionName=${{ steps.version.outputs.name }}
           -PappVersionCode=${{ github.run_number }}
 
-      - name: Name the APK
-        run: cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/kobosync-${{ steps.version.outputs.name }}.apk"
+      - name: Name the files
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/kobosync-${{ steps.version.outputs.name }}.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/kobosync-${{ steps.version.outputs.name }}.aab"
 
       - uses: actions/upload-artifact@v4
         with:
           name: kobosync-${{ steps.version.outputs.name }}
-          path: ${{ runner.temp }}/kobosync-${{ steps.version.outputs.name }}.apk
+          path: |
+            ${{ runner.temp }}/kobosync-${{ steps.version.outputs.name }}.apk
+            ${{ runner.temp }}/kobosync-${{ steps.version.outputs.name }}.aab
 
       - name: Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.HAS_KEY == 'true'
@@ -77,6 +83,20 @@ jobs:
         run: >
           gh release create "app-v${{ steps.version.outputs.name }}"
           "$RUNNER_TEMP/kobosync-${{ steps.version.outputs.name }}.apk"
+          "$RUNNER_TEMP/kobosync-${{ steps.version.outputs.name }}.aab"
           --target "${{ github.sha }}"
           --title "kobosync voor Android ${{ steps.version.outputs.name }}"
-          --notes "Installeer het APK-bestand op je telefoon. Het werkt de bestaande app bij en behoudt je boeken en instellingen."
+          --notes "Via Google Play: de interne test werkt zichzelf bij. Zonder Play: installeer het APK-bestand, dat werkt de bestaande app bij en behoudt je boeken en instellingen. Het AAB-bestand is voor Google Play."
+
+      # The app must already exist in the Play Console, with one bundle
+      # uploaded by hand; see android/README.md.
+      - name: Google Play internal testing
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.HAS_KEY == 'true' && env.HAS_PLAY == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: be.hellehond.kobosync
+          releaseFiles: ${{ runner.temp }}/kobosync-${{ steps.version.outputs.name }}.aab
+          releaseName: ${{ steps.version.outputs.name }}
+          track: internal
+          status: completed
