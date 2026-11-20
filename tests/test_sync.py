@@ -243,3 +243,23 @@ def test_public_url_is_used_behind_a_proxy(tmp_path):
     assert url.startswith(f"https://kobo.example.org/kobo/{TOKEN}/download/")
     res = client.get(f"/kobo/{TOKEN}/v1/initialization").get_json()["Resources"]
     assert res["image_url_template"].startswith(f"https://kobo.example.org/kobo/{TOKEN}/")
+
+
+def test_app_sync_skips_the_kobo_store(tmp_path, monkeypatch):
+    library = tmp_path / "library"
+    library.mkdir()
+    make_epub(library / "boek.epub")
+    cfg = Config(library_dir=library, data_dir=tmp_path / "data", auth_token=TOKEN, proxy_store=True,
+                 scan_interval=0, kepubify="none")
+    client = create_app(cfg).test_client()
+    calls = []
+
+    def forward(*args, **kwargs):
+        calls.append(1)
+        raise __import__("requests").ConnectionError("no store in tests")
+
+    monkeypatch.setattr("kobosync.store.forward", forward)
+    resp = client.get(f"/kobo/{TOKEN}/v1/library/sync", headers={"X-Kobosync-Client": "android"})
+    assert resp.status_code == 200 and len(resp.get_json()) == 1 and calls == []
+    client.get(f"/kobo/{TOKEN}/v1/library/sync")
+    assert calls == [1]

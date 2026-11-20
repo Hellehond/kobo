@@ -1,0 +1,82 @@
+name: Android app
+
+# Builds and tests the app for changes under android/. A push to main also
+# publishes the APK as a release, so merging is all it takes to get an update.
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write   # to publish the release on main
+    defaults:
+      run:
+        working-directory: android
+    env:
+      HAS_KEY: ${{ secrets.KOBOSYNC_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version
+        id: version
+        run: echo "name=$(cat version.txt).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # Without the signing secrets the APK is signed with a throwaway debug
+      # key: fine for a look, but it cannot update an installed app.
+      - name: Signing key
+        if: env.HAS_KEY == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KOBOSYNC_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/kobosync-release.p12"
+          echo "KOBOSYNC_KEYSTORE=$RUNNER_TEMP/kobosync-release.p12" >> "$GITHUB_ENV"
+
+      - name: Test and build
+        env:
+          KOBOSYNC_KEYSTORE_PASSWORD: ${{ secrets.KOBOSYNC_KEYSTORE_PASSWORD }}
+          KOBOSYNC_KEY_PASSWORD: ${{ secrets.KOBOSYNC_KEYSTORE_PASSWORD }}
+          KOBOSYNC_KEY_ALIAS: kobosync
+        run: >
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
+          -PappVersionName=${{ steps.version.outputs.name }}
+          -PappVersionCode=${{ github.run_number }}
+
+      - name: Name the APK
+        run: cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/kobosync-${{ steps.version.outputs.name }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kobosync-${{ steps.version.outputs.name }}
+          path: ${{ runner.temp }}/kobosync-${{ steps.version.outputs.name }}.apk
+
+      - name: Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.HAS_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "app-v${{ steps.version.outputs.name }}"
+          "$RUNNER_TEMP/kobosync-${{ steps.version.outputs.name }}.apk"
+          --target "${{ github.sha }}"
+          --title "kobosync voor Android ${{ steps.version.outputs.name }}"
+          --notes "Installeer het APK-bestand op je telefoon. Het werkt de bestaande app bij en behoudt je boeken en instellingen."

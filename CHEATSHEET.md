@@ -130,6 +130,12 @@ docker compose start kobosync
 Haal een boek op de Kobo niet uit je bibliotheek als je alleen de download wilt
 vernieuwen. Dan verdwijnt het van beide toestellen.
 
+## Android-app
+
+- **Installeren of bijwerken:** download het nieuwste APK-bestand van de Releases-pagina op GitHub en open het op je telefoon.
+- **Verbinden:** vul in de app hetzelfde adres in als de regel `api_endpoint` op je Kobo's.
+- **Synchroniseren:** gebeurt bij het openen van de app en van een boek. Trek de boekenlijst omlaag om het direct te doen.
+
 ## Noors woordenboek
 
 ```sh

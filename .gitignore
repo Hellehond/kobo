@@ -3,8 +3,12 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
-data/
-library/
+/data/
+/library/
 *.egg-info/
 .env
-build/
+/build/
+
+# Runtime folders of the deployment setups
+/deploy/*/data/
+/deploy/*/library/
